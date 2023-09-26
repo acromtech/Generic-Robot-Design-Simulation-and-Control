@@ -1,0 +1,48 @@
+# GLOBAL
+        current_speed=20 #init =/0
+        acceleration_coef=1.1
+        deceleration_coef=0.9
+        state=True
+        cpt1=0
+        
+        # DECELERATION POSITION CALCULATION
+        TX_frame=GsUsbFrame(can_id=0x141+id, data=[0x92,0x00,0x00,0x00,0x00,0x00,0x00,0x00])
+        RX_frame=utils.send(TX_frame)
+        current_position = ((RX_frame.data[1])+(RX_frame.data[2]<<8)+(RX_frame.data[3]<<16)+(RX_frame.data[4]<<24)+(RX_frame.data[5]<<32)+(RX_frame.data[6]<<40)+(RX_frame.data[7]<<48))*0.01
+        deceleration_position=(-(deceleration_coef/(10-set_speed)))+set_position
+        if current_position>deceleration_position:
+            test=True
+        else: 
+            test=False
+        print("cp:",current_position,"    dp:",deceleration_position,"      test:",test)
+        while True:
+            # READ CURRENT POSITION
+            TX_frame=GsUsbFrame(can_id=0x141+id, data=[0x92,0x00,0x00,0x00,0x00,0x00,0x00,0x00])
+            RX_frame=utils.send(TX_frame)
+            current_position = ((RX_frame.data[1])+(RX_frame.data[2]<<8)+(RX_frame.data[3]<<16)+(RX_frame.data[4]<<24)+(RX_frame.data[5]<<32)+(RX_frame.data[6]<<40)+(RX_frame.data[7]<<48))*0.01
+            # CURRENT SPEED (TO WRITE) CALCULATION
+            if state==True:
+                if current_speed*acceleration_coef<set_speed:
+                    current_speed=current_speed*acceleration_coef
+                else:
+                    state=False
+            else:
+                if test==True:
+                    if current_position<=deceleration_position:
+                        current_speed=current_speed*deceleration_coef
+                else:
+                    if current_position>=deceleration_position:
+                        current_speed=current_speed*deceleration_coef
+            # WRITE MOTOR DATA (ONLY CHANGE SPEED)
+            TX_frame=GsUsbFrame(can_id=0x141+id, data=[0xA4,0x00,(int(current_speed))&0xFF,((int(current_speed))&0xFF00)>>8,(set_position*100)&0xFF,((set_position*100)&0xFF00)>>8,((set_position*100)&0xFF0000)>>16,((set_position*100)&0xFF000000)>>24])
+            RX_frame=utils.send(TX_frame)
+
+            # SPY MOTOR SPEED
+            TX_frame=GsUsbFrame(can_id=0x141+id, data=[0x9C,0x00,0x00,0x00,0x00,0x00,0x00,0x00])
+            RX_frame=utils.send(TX_frame)
+            current_speed_spy=(RX_frame.data[4])+(RX_frame.data[5]<<8)
+            print("current_pos=",current_position,"     current_speed=",current_speed,"     current_speed_spy=",current_speed_spy)
+            if current_speed_spy == 0:
+                cpt1=cpt1+1
+                if cpt1==50:
+                    return
