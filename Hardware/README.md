@@ -63,4 +63,4 @@ The maximum speed of a CAN bus, according to the standard, is **1 Mbit/second**.
 > Low-speed CAN (ISO 11898-3, see above) can go up to 125 kbit/s.
 > Single-wire CAN can go up to around 50 kbit/s in its standard mode and, using a special high-speed mode used e.g. for ECU programming, up to around 100 kbit/s.
 
-*For more informations about CAN protocol and CAN bus check the [really good article by KVASER](https://www.kvaser.com/can-protocol-tutorial/)*
+*For more informations about CAN protocol and CAN bus check the [well explain article by KVASER](https://www.kvaser.com/can-protocol-tutorial/)*
