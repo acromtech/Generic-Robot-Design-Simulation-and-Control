@@ -37,6 +37,9 @@
 ## Electrical diagram of the project
 ![Electrical_Diagram](Electrical_Diagram.png)
 
+**CAN Myactuator brushless servomotors with cables and XT30 connectors**
+![Motor_wiring](Motor_wiring.jpg)
+
 ## More information about CAN protocol & CAN bus
 
 ### CAN protocol
