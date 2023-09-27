@@ -35,7 +35,7 @@
 
 
 ## Electrical diagram of the project
-(Image)(I push the electrical diagram later)
+![Electrical_Diagram](Electrical_Diagram.png)
 
 ## More information about CAN protocol & CAN bus
 
