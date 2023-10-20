@@ -7,8 +7,27 @@
 * [USB to CAN converter module](https://www.amazon.fr/Converter-Raspberry-Computer-Support-Windows/dp/B09K3LL93Q) but [CAN Hat for Raspberry Pi](https://www.kubii.com/fr/modules-relais/2487-rs485-can-hat-pour-raspberry-pi-kubii-3272496014381.html) is better (future version)
 
 ### Actuators
-* [CAN Myactuator brushless servomotors](https://www.myactuator.com/)
-> Currently the code works with [RMD-L-5005 servomotors](https://www.myactuator.com/product-page/rmd-l-5005) but we are going to adapt the python and c++ wrapper for [RMD-X servomotors](https://www.myactuator.com/rmd-x) with the specific CAN protocol
+* [CAN Myactuator RMD-X6 V3 brushless servomotors](https://www.myactuator.com/product-page/rmd-x6-1-8)
+> **Mechanical features**
+>   * No -load output Speed : 360 rpm
+>   * Nominal output Speed : 310 rpm
+>   * Nominal torque : 4.5 Nm
+>   * Motor efficency : 78 %
+>   * Motor weight : 490 g
+>   * Reducer ratio 8:1
+> 
+> **Hardware features**
+>   * Input voltage : 48 V
+>   * Nominal current : 3.6 A
+>   * Output Norminal power : 135 W
+>   * Wire Resistance : 0.55 Ohm
+>   * Wire inductance : 0.18 mH
+> 
+> **Software features**
+>   * CAN BUS :500Kbps/ 1Mbps
+>   * RS485 BUS : 115200/500K/1M/1.5K /2.5K
+>   * Servo mode(Torque /Velocity/Position)
+>   * Motion mode（feedforward torque/velocity/position)
 
 ### Cables
 * [16AWG red & black cables](https://www.amazon.fr/%C3%A9lectrique-TUOFENG-R%C3%A9sistance-temp%C3%A9ratures-bricolage/dp/B08C2RL4RY/ref=sr_1_9?__mk_fr_FR=%C3%85M%C3%85%C5%BD%C3%95%C3%91&crid=3VO2TR851SMFR&keywords=tuofeng&qid=1695765817&sprefix=tuofeng%2Caps%2C83&sr=8-9&th=1)
