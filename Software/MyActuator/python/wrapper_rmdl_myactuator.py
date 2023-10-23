@@ -39,7 +39,7 @@ if len(devs) == 0:
 
 #set can device handle from 0 to 1,2,3...  choosing the right device serial number accroding to the print
 print(devs)    
-dev = devs[1]
+dev = devs[0]
 # Close before Start device in case the device was not properly stop last time
 # If do not stop the device, bitrate setting will be fail.
 dev.stop()
@@ -357,8 +357,6 @@ class motor:
             print("RX : motor speed:",((RX_frame.data[4])+(RX_frame.data[5]<<8))*0.01,"dps")
             print("RX : motor angle:",((RX_frame.data[6])+(RX_frame.data[7]<<8))*0.01,"°")
 
-        def position_
-
     class read:
         def pid_parameter_to_RAM(id):
             TX_frame=GsUsbFrame(can_id=0x141+id, data=[0x30,0x00,0x00,0x00,0x00,0x00,0x00,0x00])
@@ -449,6 +447,5 @@ class motor:
             print("Phase C current:",((RX_frame.data[6])+(RX_frame.data[7]<<8))*0.01,"A")
 
 utils.set_can_win_ON()
-#motor.write.position_multiturn_speed_closed_loop_control(0,500,0)
-utils.set_multiturn_position_trapezoidal_signal(0,10,60,0)
+motor.write.position_multiturn_speed_closed_loop_control(0,500,0)
 utils.set_can_win_OFF()
