@@ -1,0 +1,153 @@
+{
+    "ID":{
+      "BASE_ADDR_ID": {
+        "address": "0x140",
+        "description": "Message format\nIdentifier: Single motor command sending: 0x140 + ID(1~32)\nMulti-motor command sending: 0x280\nReply: 0x240 + ID (1~32)\nFrame format: data frame\nFrame Type: Standard Frame\nDLC: 8 bytes\n\n| Type | Data Definition | Bytes | Description |\n| Frame header | 0x3E | 1 | Communication frame header, used for identification. |\n| ID | 1~32 | 1 | Device address, corresponding to the ID number of each motor. |\n| Data Length | Data Length | 1 | The length of the data field. In the standard protocol, the length is fixed to 8 bytes. |\n| Data field | Data content | According to the length | The content of the data field in the standard protocol is exactly the same as that of the CAN. |\n| Check | CRC Check | 2 | CRC16 check, low order first, high order last."
+      }
+    },
+    "WRITE_ADDR": {
+      "ADDR_WRITE_PID_PARAMETER_TO_RAM": {
+        "address": "0x31",
+        "description": "This command can write the parameters of current, speed, position loop KP and KI to RAM at one time, and it will not be saved after power off. The data type is uint8_t. The system sets the maximum range of PI parameters according to the motor model, and then divides it equally according to the maximum range of uint8_t of 256 units. Users only need to adjust 0-256 units."
+      },
+      "ADDR_WRITE_PID_PARAMETER_TO_ROM": {
+        "address": "0x32",
+        "description": "This command can write the parameters of current, speed, position loop KP and KI to ROM at one time, which can be saved after power off. The data type is uint8_t. The system sets the maximum range of PI parameters according to the motor model, and then divides it equally according to the maximum range of uint8_t of 256 units. Users only need to adjust 0-256 units."
+      },
+      "ADDR_WRITE_ACCELERATION_TO_RAM": {
+        "address": "0x43",
+        "description": "The host sends this command to write the acceleration into the RAM, and the write parameters become invalid after the power is turned off. Acceleration data Accel is uint32_t type, the unit is 1dps/s, and the parameter range is 50-80000."
+      },
+      "ADDR_WRITE_ENCODER_MULTITURN_VALUE_TO_ROM_AS_MOTOR_ZERO": {
+        "address": "0x63",
+        "description": "The host sends this command to set the zero offset (initial position) of the encoder, where the encoder multi-turn value to be written, encoderOffset, is of type int32_t, (value range, 4 bytes of valid data). Note: After writing the position of the new zero point, the motor needs to be restarted to be effective. Because of the change of the zero offset, the new zero offset (initial position) should be used as a reference when setting the target position"
+      },
+      "ADDR_WRITE_ENCODER_CURRENT_MULTITURN_POSITION_TO_ROM_AS_MOTOR_ZERO_POSITION": {
+        "address": "0x64",
+        "description": "Write the current encoder position of the motor as the multi-turn encoder zero offset (initial position) into the ROM Note: After writing the new zero point position, the motor needs to be restarted to be effective. Because of the change of the zero offset, the new zero offset (initial position) should be used as a reference when setting the target position."
+      }
+    },
+    "CLOSED_LOOP_CONTROL_ADDR": {
+      "ADDR_TORQUE_CLOSED_LOOP_CONTROL": {
+        "address": "0xA1",
+        "description": "This command is a control command, which can be run when the motor is not faulty. The host sends this command to control the torque and current output of the motor. The control value iqControl is of type int16_t and the unit is 0.01A/LSB"
+      },
+      "ADDR_SPEED_CLOSED_LOOP_CONTROL": {
+        "address": "0xA2",
+        "description": "This command is a control command, which can be run when the motor is not faulty. The host sends this command to control the speed of the motor output shaft. The control value speedControl is int32_t type, and the corresponding actual speed is 0.01dps/LSB."
+      },
+      "ADDR_ABSOLUTE_POSITION_CLOSED_LOOP_CONTROL": {
+        "address": "0xA4",
+        "description": "This command is a control command, which can be run when the motor is not faulty. The host sends this command to control the position of the motor (multi-turn angle). The control value angleControl is int32_t type, and the corresponding actual position is 0.01degree/LSB, that is, 36000 represents 360°, and the rotation direction of the motor is determined by the difference between the target position and the current position . The control value maxSpeed limits the maximum speed of the motor output shaft rotation, which is of type uint16_t, corresponding to the actual speed of 1dps/LSB."
+      },
+      "ADDR_INCREMENTAL_POSITION_CLOSED_LOOP_CONTROL": {
+        "address": "0xA8",
+        "description": "This command is a control command, which can be run when the motor is not faulty. The host sends this command to control the incremental position (multi-turn angle) of the motor, and run the input position increment with the current position as the starting point. The control value angleControl is of type int32_t, and the corresponding actual position is 0.01degree/LSB, that is, 36000 represents 360°, and the rotation direction of the motor is determined by the incremental position symbol. The control value maxSpeed limits the maximum speed of the motor output shaft rotation, which is of type uint16_t, corresponding to the actual speed of 1dps/LSB."
+      }
+    },
+    "READ_ADDR": {
+      "ADDR_READ_PID_PARAMETER_TO_RAM": {
+        "address": "0x30",
+        "description": "This command can read the parameters of current, speed, position loop KP and KI at one time, and the data type is uint8_t. The system sets the maximum range of PI parameters according to the motor model, and then divides it equally according to the maximum range of uint8_t of 256 units. Users only need to adjust 0-256 units."
+      },
+      "ADDR_READ_ACCELERATION": {
+        "address": "0x42",
+        "description": "The host sends this command to read the acceleration parameters of the current motor"
+      },
+      "ADDR_READ_MULTITURN_ENCODER_POSITION": {
+        "address": "0x60",
+        "description": "The host sends this command to read the multi-turn position of the encoder, which represents the rotation angle of the motor output shaft, including the multi-turn angle"
+      },
+      "ADDR_READ_MULTITURN_ENCODER_ORIGINAL_POSITION": {
+        "address": "0x61",
+        "description": "The host sends this command to read the multi-turn encoder home position, ie the multi-turn encoder value without the zero offset (home position)."
+      },
+      "ADDR_READ_MULTITURN_ENCODER_ZERO_OFFSET": {
+        "address": "0x62",
+        "description": "The host sends this command to read the multi-turn zero offset value (initial position) of the encoder"
+      },
+      "ADDR_READ_MULTITURN_ANGLE": {
+        "address": "0x92",
+        "description": "The host sends this command to read the current multi-turn absolute angle value of the motor"
+      },
+      "ADDR_READ_MOTOR_STATUS_1_ERROR_FLAG": {
+        "address": "0x9A",
+        "description": "This command reads the current motor temperature, voltage and error status flags"
+      },
+      "ADDR_READ_MOTOR_STATUS_2": {
+        "address": "0x9C",
+        "description": "This command reads the temperature, speed and encoder position of the current motor."
+      },
+      "ADDR_READ_MOTOR_STATUS_3": {
+        "address": "0x9D",
+        "description": "This command reads the current motor temperature and phase current data."
+      }
+    },
+    "SYSTEM_ADDR": {
+      "ADDR_MOTION_MODE_CONTROL_COMMAND_CAN": {
+        "address": "0x400",
+        "description": "The command consists of 5 input parameters: p_des (desired position), v_des(desired velocity), t_ff (feedforward torque), kp (position deviation coefficient), kd (speed deviation coefficient). Each parameter has a preset range size: p_des: -12.5 to 12.5 in rad; v_des: -45 to 45, in rad/s; t_ff: -24 to 24, unit N-m; kp: 0 to 500; kd: 0 to 5; Function expression: IqRef = [kp*(p_des - p_fd_actual position) + kd*(v_des - v_fb_actual speed) + t_ff]*KT_torque coefficient; IqRef is the output current of the last given motor."
+      },
+      "ADDR_RS485ID_SETTING": {
+        "address": "0x79",
+        "description": "This command is used to set and read RS485 ID. Communication ID uses 0xCD, all devices on the bus will receive and process this command, When modifying, you need to pay attention to whether multiple devices are connected, so that the IDs of multiple devices may be modified to the same at the same time. The host sends this command to set and read the RS485 ID, the parameters are as follows. 3. The read and write flag bit wReadWriteFlag is bool type, 1 read 0 write. 4. RS485-ID, size range (#1~#32), uint16_t type (synchronized with the upper computer function), device identifier ID (1~32)"
+      },
+      "ADDR_SYSTEM_OPERATING_MODE": {
+        "address": "0x70",
+        "description": "This command reads the current motor running mode"
+      },
+      "ADDR_MOTOR_POWER_ACQUISITION": {
+        "address": "0x71",
+        "description": "This command reads the current motor power."
+      },
+      "ADDR_SYSTEM_RESET": {
+        "address": "0x76",
+        "description": "This command is used to reset the system program."
+      },
+      "ADDR_SYSTEM_BRAKE_RELEASE": {
+        "address": "0x77",
+        "description": "This command is used to open the system brake. The system will release the holding brake, and the motor will be in a movable state without being restricted by the holding brake"
+      },
+      "ADDR_SYSTEM_BRAKE_LOCK": {
+        "address": "0x78",
+        "description": "This command is used to close the system holding brake. The holding brake locks the motor and the motor can no longer run. The holding brake is also in this state after the system is powered off."
+      },
+      "ADDR_SHUTDOWN": {
+        "address": "0x80",
+        "description": "Turns off the motor output and also clears the motor running state, not in any closed loop mode."
+      },
+      "ADDR_STOP": {
+        "address": "0x81",
+        "description": "Stop the motor, the closed-loop mode where the motor is still running, just stop the motor speed"
+      },
+      "ADDR_SYSTEM_RUNTIME_READ": {
+        "address": "0xB1",
+        "description": "This command is used to obtain the system running time in ms."
+      },
+      "ADDR_SYSTEM_SOFTWARE_VERSION_DATE_READ": {
+        "address": "0xB2",
+        "description": "This command is used to get the update date of the system software version."
+      }
+    },
+    "COMMUNICATION_ADDR": {
+      "ADDR_COMMUNICATION_INTERRUPTION_PROTECTION_TIME_SETTING": {
+        "address": "0xB3",
+        "description": "This command is used to set the communication interruption protection time in ms. If the communication is interrupted for more than the set time, it will cut off the output brake lock. To run again, you need to establish stable and continuous communication first. Writing 0 means that the communication interruption protection function is not enabled."
+      },
+      "ADDR_COMMUNICATION_BAUDRATE_SETTING": {
+        "address": "0xB4",
+        "description": "This instruction can set the communication baudrate of CAN and RS485 bus. The parameters will be saved in ROM after setting, and will be saved after power off, and will run at the modified baudrate when powered on again."
+      }
+    },
+    "MULTI_MOTOR_ADDR": {
+      "ADDR_MULTI_MOTOR": {
+        "address": "0x280",
+        "description": "The ID number is 280, which means that multiple motors correspond to the same command at the same time. The content and function of the instruction are the same as those of the single-motor instruction. For details, please refer to the single-motor instruction"
+      },
+      "ADDR_CANID_SETTING": {
+        "address": "0x79",
+        "description": "This command is used to set and read CAN ID. The host sends this command to set and read the CAN ID, the parameters are as follows. 1. The read and write flag bit wReadWriteFlag is bool type, 1 read 0 write. 2. CANID, size range (#1~#32), uint16_t type (synchronized with the upper computer function), device identifier 0x140 + ID (1~32)."
+      }
+    }
+  }
+  
