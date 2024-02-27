@@ -7,46 +7,27 @@ Dependencies:
 
 Usage:
 1. Import the required protocol modules from the Real package.
-2. Create instances of different actuator series, such as X, L, or S, by providing the necessary parameters.
+2. Create instances of different actuator series, such as X or L, by providing the necessary parameters.
 3. Access specific functionality or properties of each actuator series as needed.
 """
 
 # Import the required protocol modules from the Real package
-#from Real import ProtocolSSeries
-from Real.ProtocolLSeries import ProtocolLSeries
-#from Real import ProtocolXSeriesV2
-from Real.ProtocolXSeriesV3 import ProtocolXSeriesV3
+from Real.ProtocolV1 import ProtocolV1
+from Real.ProtocolV2 import ProtocolV2
+from Real.ProtocolV3 import ProtocolV3
 
 class MyActuatorRMD:
-
     class X:
         """
-        Class representing the X series of actuators from MyActuatorRMD.
+        Class representing the RMD-X series.
         """
-
-        class V2:
+        class V2(ProtocolV2):
             """
-            Class representing the V2 version of the X series actuators.
+            Class representing the RMD-X-V2 actuators.
             """
-            def __init__(self) -> None:
-                pass
-
-        class V3(ProtocolXSeriesV3):
-            """
-            Class representing the V3 version of the X series actuators, inheriting from ProtocolXSeriesV3.
-
-            Attributes:
-                id (int): Identifier for the actuator.
-                reducer_ratio (int): Reducer ratio for the actuator.
-                can_bus: CAN bus instance for communication.
-            """
-
-            id: int
-            reducer_ratio: int
-
             def __init__(self, id: int, reducer_ratio: int, can_bus):
                 """
-                Initialize the V3 actuator with the given parameters.
+                Initialize the RMD-X-V2 actuator with the given parameters.
 
                 Parameters:
                     id (int): Identifier for the actuator.
@@ -57,26 +38,52 @@ class MyActuatorRMD:
                 self.reducer_ratio = reducer_ratio
                 self.can_bus = can_bus
                 super().__init__(can_bus)
-
-    class L(ProtocolLSeries):
-        """
-        Class representing the L series of actuators from MyActuatorRMD, inheriting from ProtocolLSeries.
-        """
-
-        def __init__(self, id: int, reducer_ratio: int, can_bus):
+        class V3(ProtocolV3):
             """
-            Initialize the L series actuator with the given parameters.
-
-            Parameters:
-                id (int): Identifier for the actuator.
-                reducer_ratio (int): Reducer ratio for the actuator.
-                can_bus: CAN bus instance for communication.
+            Class representing the RMD-X-V3 actuators.
             """
-            super().__init__(id, reducer_ratio, can_bus)
+            def __init__(self, id: int, reducer_ratio: int, can_bus):
+                """
+                Initialize the RMD-X-V3 actuator with the given parameters.
 
-    class S:
+                Parameters:
+                    id (int): Identifier for the actuator.
+                    reducer_ratio (int): Reducer ratio for the actuator.
+                    can_bus: CAN bus instance for communication.
+                """
+                self.id = id
+                self.reducer_ratio = reducer_ratio
+                self.can_bus = can_bus
+                super().__init__(can_bus)
+    class L:
         """
-        Class representing the S series of actuators from MyActuatorRMD.
+        Class representing the RMD-L series.
         """
-        def __init__(self) -> None:
-            pass
+        class V1(ProtocolV1):
+            """
+            Class representing the RMD-L-V1 actuators.
+            """
+            def __init__(self, id: int, reducer_ratio: int, can_bus):
+                """
+                Initialize the RMD-L-V1 actuator with the given parameters.
+
+                Parameters:
+                    id (int): Identifier for the actuator.
+                    reducer_ratio (int): Reducer ratio for the actuator.
+                    can_bus: CAN bus instance for communication.
+                """
+                super().__init__(id, reducer_ratio, can_bus)
+        class V2(ProtocolV2):
+            """
+            Class representing the RMD-L-V2 actuators.
+            """
+            def __init__(self, id: int, reducer_ratio: int, can_bus):
+                """
+                Initialize the RMD-L-V2 actuator with the given parameters.
+
+                Parameters:
+                    id (int): Identifier for the actuator.
+                    reducer_ratio (int): Reducer ratio for the actuator.
+                    can_bus: CAN bus instance for communication.
+                """
+                super().__init__(id, reducer_ratio, can_bus)

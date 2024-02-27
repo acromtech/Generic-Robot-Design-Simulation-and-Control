@@ -49,7 +49,7 @@ class CanBusGsUsb:
         else:
             print("Bitrate set to", self.bitrate)
 
-    def sendMessage(self, id, data):
+    def sendMessage(self, id, data, debug = None):
         """
         Send a CAN message.
 
@@ -66,9 +66,9 @@ class CanBusGsUsb:
                 if frame.data[0] == iframe.data[0]:
                     cpt = cpt + 1
                     if cpt == 1:
-                        print("TX  {}".format(frame))
+                        if debug!=None: print("TX  {}".format(frame))
                     else:
-                        print("RX  {}".format(iframe))
+                        if debug!=None: print("RX  {}".format(iframe))
                         return iframe
 
     def setup(self):

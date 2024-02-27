@@ -101,8 +101,12 @@ class Simulation:
         for i in range(numJoints):
             p.resetJointState(self.robot_id, i, rp[i])
 
-        while True:
-            p.stepSimulation()
+        for j in range (5):
+            for i in range (100):
+                p.stepSimulation()
+                self.move_joint(abs(j-5),i*0.1)
+                time.sleep(0.02)
+
             # ... Add something here to move the joints of the kuka robot
 
     def close(self):
@@ -129,6 +133,21 @@ class Simulation:
         """
         
         
+    def move_joint(self, joint_index, target_position):
+        """
+        Move a joint of the robot to the target position.
+
+        Parameters:
+            joint_index (int): Index of the joint to move.
+            target_position (float): Target position to move the joint to.
+        """
+        p.setJointMotorControl2(bodyUniqueId=self.robot_id,
+                                jointIndex=joint_index,
+                                controlMode=p.POSITION_CONTROL,
+                                targetPosition=target_position)
+
+        
+
     def move_joints(self, joint_indices, target_positions):
         """
         Move multiple joints of the robot to the target positions.
@@ -137,15 +156,14 @@ class Simulation:
             joint_indices (list[int]): Indices of the joints to move.
             target_positions (list[float]): Target positions for each joint.
         """
-        
+        control_modes = [p.POSITION_CONTROL] * len(joint_indices)
+        forces = [500] * len(joint_indices)  # Adjust the force as needed
+        p.setJointMotorControlArray(bodyUniqueId=self.robot_id,
+                                    jointIndices=joint_indices,
+                                    controlMode=control_modes,
+                                    targetPositions=target_positions,
+                                    forces=forces)
 
-    def get_joint_names(self):
-        """
-        Get the names of all joints in the URDF file.
-
-        Returns:
-            list[str]: List of joint names.
-        """
         
     
     # ... Add methods if you need it

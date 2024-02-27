@@ -1,48 +1,65 @@
-import json
-from Real.CanBusSocket import CanBusSocket
-from Real.CanBusGsUsb import CanBusGsUsb
+from CanBusGsUsb import CanBusGsUsb
 
-class ProtocolXSeriesV3(CanBusSocket,CanBusGsUsb):
+"""
+CAN Bus
+    Parameters
+    - Bus interface: CAN
+    - Baud rate: 1Mbps
+
+    Message format
+    - Identifier: Single motor command sending: 0x140 + ID(1~32)
+    - Multi-motor command sending: 0x280
+    - Reply: 0x240 + ID (1~32)
+    - Frame format: data frame
+    - Frame Type: Standard Frame
+    - DLC: 8 bytes
+"""
+
+class ProtocolV3(CanBusGsUsb):
     # Attributes
-    BASE_ADDR_ID = int
-    ADDR_WRITE_PID_PARAMETER_TO_RAM = int
-    ADDR_WRITE_PID_PARAMETER_TO_ROM = int
-    ADDR_WRITE_ACCELERATION_TO_RAM = int
-    ADDR_WRITE_ENCODER_MULTITURN_VALUE_TO_ROM_AS_MOTOR_ZERO = int
-    ADDR_WRITE_ENCODER_CURRENT_MULTITURN_POSITION_TO_ROM_AS_MOTOR_ZERO_POSITION = int
+    BASE_ADDR_ID = 0x140
 
-    ADDR_TORQUE_CLOSED_LOOP_CONTROL = int
-    ADDR_SPEED_CLOSED_LOOP_CONTROL = int
-    ADDR_ABSOLUTE_POSITION_CLOSED_LOOP_CONTROL = int
-    ADDR_INCREMENTAL_POSITION_CLOSED_LOOP_CONTROL = int
+    ADDR_READ_PID_PARAMETER_TO_RAM = 0x30
+    ADDR_WRITE_PID_PARAMETER_TO_RAM = 0x31
+    ADDR_WRITE_PID_PARAMETER_TO_ROM = 0x32
 
-    ADDR_READ_PID_PARAMETER_TO_RAM = int
-    ADDR_READ_ACCELERATION = int
-    ADDR_READ_MULTITURN_ENCODER_POSITION = int
-    ADDR_READ_MULTITURN_ENCODER_ORIGINAL_POSITION = int
-    ADDR_READ_MULTITURN_ENCODER_ZERO_OFFSET = int
-    ADDR_READ_MULTITURN_ANGLE = int
-    ADDR_READ_MOTOR_STATUS_1_ERROR_FLAG = int
-    ADDR_READ_MOTOR_STATUS_2 = int
-    ADDR_READ_MOTOR_STATUS_3 = int
+    ADDR_READ_ACCELERATION = 0x42
+    ADDR_WRITE_ACCELERATION_TO_RAM = 0x43
 
-    ADDR_MOTION_MODE_CONTROL_COMMAND_CAN = int
-    ADDR_RS485ID_SETTING = int
-    ADDR_SYSTEM_OPERATING_MODE = int
-    ADDR_MOTOR_POWER_ACQUISITION = int
-    ADDR_SYSTEM_RESET = int
-    ADDR_SYSTEM_BRAKE_RELEASE = int
-    ADDR_SYSTEM_BRAKE_LOCK = int
-    ADDR_SHUTDOWN = int
-    ADDR_STOP = int
-    ADDR_SYSTEM_RUNTIME_READ = int
-    ADDR_SYSTEM_SOFTWARE_VERSION_DATE_READ = int
+    ADDR_READ_MULTITURN_ENCODER_POSITION = 0x60
+    ADDR_READ_MULTITURN_ENCODER_ORIGINAL_POSITION = 0x61
+    ADDR_READ_MULTITURN_ENCODER_ZERO_OFFSET = 0x62
+    ADDR_WRITE_ENCODER_MULTITURN_VALUE_TO_ROM_AS_MOTOR_ZERO = 0x63
+    ADDR_WRITE_ENCODER_CURRENT_MULTITURN_POSITION_TO_ROM_AS_MOTOR_ZERO_POSITION = 0x64
 
-    ADDR_COMMUNICATION_INTERRUPTION_PROTECTION_TIME_SETTING = int
-    ADDR_COMMUNICATION_BAUDRATE_SETTING = int
+    ADDR_READ_MULTITURN_ANGLE = 0x92
+    ADDR_READ_MOTOR_STATUS_1_ERROR_FLAG = 0x9A
+    ADDR_READ_MOTOR_STATUS_2 = 0x9C
+    ADDR_READ_MOTOR_STATUS_3 = 0x9D
 
-    ADDR_MULTI_MOTOR = int
-    ADDR_CANID_SETTING = int
+    ADDR_SHUTDOWN = 0x80
+    ADDR_STOP = 0x81
+
+    ADDR_TORQUE_CLOSED_LOOP_CONTROL = 0xA1
+    ADDR_SPEED_CLOSED_LOOP_CONTROL = 0xA2
+    ADDR_ABSOLUTE_POSITION_CLOSED_LOOP_CONTROL = 0xA4
+    ADDR_INCREMENTAL_POSITION_CLOSED_LOOP_CONTROL = 0xA8
+
+    ADDR_SYSTEM_OPERATING_MODE = 0x70
+    ADDR_MOTOR_POWER_ACQUISITION = 0x71
+    ADDR_SYSTEM_RESET = 0x76
+    ADDR_SYSTEM_BRAKE_RELEASE = 0x77
+    ADDR_SYSTEM_BRAKE_LOCK = 0x78
+    
+    ADDR_SYSTEM_RUNTIME_READ = 0xB1
+    ADDR_SYSTEM_SOFTWARE_VERSION_DATE_READ = 0xB2
+    ADDR_COMMUNICATION_INTERRUPTION_PROTECTION_TIME_SETTING = 0xB3
+    ADDR_COMMUNICATION_BAUDRATE_SETTING = 0xB4
+
+    ADDR_MULTI_MOTOR = 0x280
+    ADDR_CANID_SETTING = 0x79
+    ADDR_MOTION_MODE_CONTROL_COMMAND_CAN = 0x400
+    ADDR_RS485ID_SETTING = 0x79
 
     MOTOR_STALL = 0x0002
     LOW_PRESSURE = 0x0004
@@ -53,86 +70,10 @@ class ProtocolXSeriesV3(CanBusSocket,CanBusGsUsb):
     MOTOR_TEMP_OVER = 0x1000
     ENCODER_CALIB_ERROR = 0x2000
 
-    def __init__(self,can_transceiver):
-        if isinstance(can_transceiver,CanBusSocket):
-            super().__init__()
-        elif isinstance(can_transceiver,CanBusGsUsb):
-            super().__init__()
-
-        self.config_data = None
-        self.load_protocol_configuration(f"./02_clean_wrapper/ProtocolXSeriesV3.json")
-        print("Protocol loaded")
-        self.can_bus = can_transceiver
-
-    def load_protocol_configuration(self, json_file):
-        with open(json_file, 'r') as file:
-            self.config_data = json.load(file)
-
-        # ID Addresses
-        id_config = self.config_data.get("ID", {})
-        self.BASE_ADDR_ID = int(id_config["BASE_ADDR_ID"].get("address", ""), 16)
-
-        # Write Addresses
-        self.ADDR_WRITE_PID_PARAMETER_TO_RAM = int(self.config_data["WRITE_ADDR"]["ADDR_WRITE_PID_PARAMETER_TO_RAM"].get("address", ""), 16)
-        self.ADDR_WRITE_PID_PARAMETER_TO_ROM = int(self.config_data["WRITE_ADDR"]["ADDR_WRITE_PID_PARAMETER_TO_ROM"].get("address", ""), 16)
-        self.ADDR_WRITE_ACCELERATION_TO_RAM = int(self.config_data["WRITE_ADDR"]["ADDR_WRITE_ACCELERATION_TO_RAM"].get("address", ""), 16)
-        self.ADDR_WRITE_ENCODER_MULTITURN_VALUE_TO_ROM_AS_MOTOR_ZERO = int(self.config_data["WRITE_ADDR"]["ADDR_WRITE_ENCODER_MULTITURN_VALUE_TO_ROM_AS_MOTOR_ZERO"].get("address", ""), 16)
-        self.ADDR_WRITE_ENCODER_CURRENT_MULTITURN_POSITION_TO_ROM_AS_MOTOR_ZERO_POSITION = int(self.config_data["WRITE_ADDR"]["ADDR_WRITE_ENCODER_CURRENT_MULTITURN_POSITION_TO_ROM_AS_MOTOR_ZERO_POSITION"].get("address", ""), 16)
-
-        # Closed Loop Control Addresses
-        self.ADDR_TORQUE_CLOSED_LOOP_CONTROL = int(self.config_data["CLOSED_LOOP_CONTROL_ADDR"]["ADDR_TORQUE_CLOSED_LOOP_CONTROL"].get("address", ""), 16)
-        self.ADDR_SPEED_CLOSED_LOOP_CONTROL = int(self.config_data["CLOSED_LOOP_CONTROL_ADDR"]["ADDR_SPEED_CLOSED_LOOP_CONTROL"].get("address", ""), 16)
-        self.ADDR_ABSOLUTE_POSITION_CLOSED_LOOP_CONTROL = int(self.config_data["CLOSED_LOOP_CONTROL_ADDR"]["ADDR_ABSOLUTE_POSITION_CLOSED_LOOP_CONTROL"].get("address", ""), 16)
-        self.ADDR_INCREMENTAL_POSITION_CLOSED_LOOP_CONTROL = int(self.config_data["CLOSED_LOOP_CONTROL_ADDR"]["ADDR_INCREMENTAL_POSITION_CLOSED_LOOP_CONTROL"].get("address", ""), 16)
-
-        # Read Addresses
-        self.ADDR_READ_PID_PARAMETER_TO_RAM = int(self.config_data["READ_ADDR"]["ADDR_READ_PID_PARAMETER_TO_RAM"].get("address", ""), 16)
-        self.ADDR_READ_ACCELERATION = int(self.config_data["READ_ADDR"]["ADDR_READ_ACCELERATION"].get("address", ""), 16)
-        self.ADDR_READ_MULTITURN_ENCODER_POSITION = int(self.config_data["READ_ADDR"]["ADDR_READ_MULTITURN_ENCODER_POSITION"].get("address", ""), 16)
-        self.ADDR_READ_MULTITURN_ENCODER_ORIGINAL_POSITION = int(self.config_data["READ_ADDR"]["ADDR_READ_MULTITURN_ENCODER_ORIGINAL_POSITION"].get("address", ""), 16)
-        self.ADDR_READ_MULTITURN_ENCODER_ZERO_OFFSET = int(self.config_data["READ_ADDR"]["ADDR_READ_MULTITURN_ENCODER_ZERO_OFFSET"].get("address", ""), 16)
-        self.ADDR_READ_MULTITURN_ANGLE = int(self.config_data["READ_ADDR"]["ADDR_READ_MULTITURN_ANGLE"].get("address", ""), 16)
-        self.ADDR_READ_MOTOR_STATUS_1_ERROR_FLAG = int(self.config_data["READ_ADDR"]["ADDR_READ_MOTOR_STATUS_1_ERROR_FLAG"].get("address", ""), 16)
-        self.ADDR_READ_MOTOR_STATUS_2 = int(self.config_data["READ_ADDR"]["ADDR_READ_MOTOR_STATUS_2"].get("address", ""), 16)
-        self.ADDR_READ_MOTOR_STATUS_3 = int(self.config_data["READ_ADDR"]["ADDR_READ_MOTOR_STATUS_3"].get("address", ""), 16)
-
-        # System Addresses
-        self.ADDR_MOTION_MODE_CONTROL_COMMAND_CAN = int(self.config_data["SYSTEM_ADDR"]["ADDR_MOTION_MODE_CONTROL_COMMAND_CAN"].get("address", ""), 16)
-        self.ADDR_RS485ID_SETTING = int(self.config_data["SYSTEM_ADDR"]["ADDR_RS485ID_SETTING"].get("address", ""), 16)
-        self.ADDR_SYSTEM_OPERATING_MODE = int(self.config_data["SYSTEM_ADDR"]["ADDR_SYSTEM_OPERATING_MODE"].get("address", ""), 16)
-        self.ADDR_MOTOR_POWER_ACQUISITION = int(self.config_data["SYSTEM_ADDR"]["ADDR_MOTOR_POWER_ACQUISITION"].get("address", ""), 16)
-        self.ADDR_SYSTEM_RESET = int(self.config_data["SYSTEM_ADDR"]["ADDR_SYSTEM_RESET"].get("address", ""), 16)
-        self.ADDR_SYSTEM_BRAKE_RELEASE = int(self.config_data["SYSTEM_ADDR"]["ADDR_SYSTEM_BRAKE_RELEASE"].get("address", ""), 16)
-        self.ADDR_SYSTEM_BRAKE_LOCK = int(self.config_data["SYSTEM_ADDR"]["ADDR_SYSTEM_BRAKE_LOCK"].get("address", ""), 16)
-        self.ADDR_SHUTDOWN = int(self.config_data["SYSTEM_ADDR"]["ADDR_SHUTDOWN"].get("address", ""), 16)
-        self.ADDR_STOP = int(self.config_data["SYSTEM_ADDR"]["ADDR_STOP"].get("address", ""), 16)
-        self.ADDR_SYSTEM_RUNTIME_READ = int(self.config_data["SYSTEM_ADDR"]["ADDR_SYSTEM_RUNTIME_READ"].get("address", ""), 16)
-        self.ADDR_SYSTEM_SOFTWARE_VERSION_DATE_READ = int(self.config_data["SYSTEM_ADDR"]["ADDR_SYSTEM_SOFTWARE_VERSION_DATE_READ"].get("address", ""), 16)
-
-        # Communication Addresses
-        self.ADDR_COMMUNICATION_INTERRUPTION_PROTECTION_TIME_SETTING = int(self.config_data["COMMUNICATION_ADDR"]["ADDR_COMMUNICATION_INTERRUPTION_PROTECTION_TIME_SETTING"].get("address", ""), 16)
-        self.ADDR_COMMUNICATION_BAUDRATE_SETTING = int(self.config_data["COMMUNICATION_ADDR"]["ADDR_COMMUNICATION_BAUDRATE_SETTING"].get("address", ""), 16)
-
-        # Multi-Motor Addresses
-        self.ADDR_MULTI_MOTOR = int(self.config_data["MULTI_MOTOR_ADDR"]["ADDR_MULTI_MOTOR"].get("address", ""), 16)
-        self.ADDR_CANID_SETTING = int(self.config_data["MULTI_MOTOR_ADDR"]["ADDR_CANID_SETTING"].get("address", ""), 16)
-    
-    def info(self, address):
-        key = None
-        section = None
-        for s, values in self.config_data.items():
-            for k, data in values.items():
-                if int(data.get("address"),16) == address:
-                    key = k
-                    section = s
-                    break
-        if key:
-            description = self.config_data[section][key].get('description', 'Description not available')
-            print("\n\033[1mSection:\n\033[0m", section)
-            print("\n\033[1mKey:\n\033[0m", key)
-            print("\n\033[1mDescription:\n\033[0m", description,"\n")
-        else:
-            print("\033[91mAddress not found\033[0m")
+    def __init__(self,id:int,reducer_ratio:int,can_bus:CanBusGsUsb):
+        self.id = id
+        self.reducer_ratio = reducer_ratio
+        self.can_bus = can_bus
 
     def shutdown(self, id): 
         msg = self.can_bus.sendMessage(self.BASE_ADDR_ID + id, [self.ADDR_SHUTDOWN, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
