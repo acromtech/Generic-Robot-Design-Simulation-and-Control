@@ -46,7 +46,7 @@ class ProtocolV1(CanBusGsUsb):
         self.reducer_ratio = reducer_ratio
         self.can_bus = can_bus
 
-    def read_pid_parameter_to_RAM(self,debug=None):
+    def read_pid_parameter_to_RAM(self, debug=None):
         """
         Reads the current PID parameters from RAM.
 
@@ -63,6 +63,12 @@ class ProtocolV1(CanBusGsUsb):
         - DATA[5]: Speed loop Ki
         - DATA[6]: Torque loop Kp
         - DATA[7]: Torque loop Ki
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - pid_parameters: Tuple containing the PID parameters in the order (current_loop_KP, current_loop_KI, speed_loop_KP, speed_loop_KI, position_loop_KP, position_loop_KI).
         """
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_READ_PID_PARAMETER_TO_RAM, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         current_loop_KP = msg.data[2]
@@ -71,16 +77,26 @@ class ProtocolV1(CanBusGsUsb):
         speed_loop_KI = msg.data[5]
         position_loop_KP = msg.data[6]
         position_loop_KI = msg.data[7]
-        if debug != None:
-            print(f"Current loop KP parameters: {current_loop_KP}")
-            print(f"Current loop KI parameters: {current_loop_KI}")
-            print(f"Speed loop KP parameters: {speed_loop_KP}")
-            print(f"Speed loop KI parameters: {speed_loop_KI}")
-            print(f"Position loop KP parameters: {position_loop_KP}")
-            print(f"Position loop KI parameters: {position_loop_KI}")
+
+        real_current_loop_KP = msg.data[2] * (3/256) # assuming that the maximum value of the current loop set by the system is 3
+        real_current_loop_KI = msg.data[3] * (0.1/256) # assuming that the maximum value of the current loop is 0.1
+        real_speed_loop_KP = msg.data[4] * (0.1/256) # assuming that the maximum value of the current loop is 0.1
+        real_speed_loop_KI = msg.data[5] * (0.01/256)  # assuming that the maximum value of the current loop is 0.01
+        real_position_loop_KP = msg.data[6] * (0.1/256)  # assuming that the maximum value of the current loop is 0.1
+        real_position_loop_KI = msg.data[7] * (0.01/256)  # assuming that the maximum value of the current loop is 0.01
+
+        # Print debug information if specified
+        if debug:
+            print(f"Current loop KP parameters (0-256): {current_loop_KP} \t real: {real_current_loop_KP}")
+            print(f"Current loop KI parameters (0-256): {current_loop_KI} \t real: {real_current_loop_KI}")
+            print(f"Speed loop KP parameters (0-256): {speed_loop_KP} \t real: {real_speed_loop_KP}")
+            print(f"Speed loop KI parameters (0-256): {speed_loop_KI} \t real: {real_speed_loop_KI}")
+            print(f"Position loop KP parameters (0-256): {position_loop_KP} \t real: {real_position_loop_KP}")
+            print(f"Position loop KI parameters (0-256): {position_loop_KI} \t real: {real_position_loop_KI}")
+
         return current_loop_KP, current_loop_KI, speed_loop_KP, speed_loop_KI, position_loop_KP, position_loop_KI
-	
-    def write_pid_parameter_to_RAM(self, current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki,debug=None):
+
+    def write_pid_parameter_to_RAM(self, current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki, debug=None):
         """
         Writes the PID parameters to RAM.
 
@@ -96,18 +112,58 @@ class ProtocolV1(CanBusGsUsb):
 
         Response Structure:
         - Same as the sent command.
+
+        Parameters:
+        - current_loop_kp: Current loop Kp parameter. (between 0-256)
+        - current_loop_ki: Current loop Ki parameter. (between 0-256)
+        - speed_loop_kp: Speed loop Kp parameter. (between 0-256)
+        - speed_loop_ki: Speed loop Ki parameter. (between 0-256)
+        - position_loop_kp: Position loop Kp parameter. (between 0-256)
+        - position_loop_ki: Position loop Ki parameter. (between 0-256)
+        - debug: Boolean flag indicating whether to print debug information. (True or False)
+
+        Returns:
+        - pid_parameters: Tuple containing the PID parameters in the order (current_loop_KP, current_loop_KI, speed_loop_KP, speed_loop_KI, position_loop_KP, position_loop_KI).
         """
+        # Check if the parameters are of correct types
+        if not all(isinstance(param, int) for param in [current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki]):
+            raise TypeError("PID parameters must be integers.")
+
+        # Ensure the parameters are within the valid range
+        if any(param < 0 for param in [current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki]):
+            raise ValueError("PID parameters must be non-negative.")
+        if any(param > 256 for param in [current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki]):
+                raise ValueError("PID parameters can't be up than 256.")
+        
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_WRITE_PID_PARAMETER_TO_RAM, 0x00, current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki])
-        if debug != None:
-            print("Current loop KP set to ", msg.data[2])
-            print("Current loop KI set to ", msg.data[3])
-            print("Speed loop KP set to ", msg.data[4])
-            print("Speed loop KI set to ", msg.data[5])
-            print("Position loop KP set to ", msg.data[6])
-            print("Position loop KI set to ", msg.data[7])
-        return msg.data[2], msg.data[3], msg.data[4], msg.data[5], msg.data[6], msg.data[7]
+
+        # Extract response data
+        current_loop_KP = msg.data[2]
+        current_loop_KI = msg.data[3]
+        speed_loop_KP = msg.data[4]
+        speed_loop_KI = msg.data[5]
+        position_loop_KP = msg.data[6]
+        position_loop_KI = msg.data[7]
+
+        real_current_loop_KP = msg.data[2] * (3/256) # assuming that the maximum value of the current loop set by the system is 3
+        real_current_loop_KI = msg.data[3] * (0.1/256) # assuming that the maximum value of the current loop is 0.1
+        real_speed_loop_KP = msg.data[4] * (0.1/256) # assuming that the maximum value of the current loop is 0.1
+        real_speed_loop_KI = msg.data[5] * (0.01/256)  # assuming that the maximum value of the current loop is 0.01
+        real_position_loop_KP = msg.data[6] * (0.1/256)  # assuming that the maximum value of the current loop is 0.1
+        real_position_loop_KI = msg.data[7] * (0.01/256)  # assuming that the maximum value of the current loop is 0.01
+
+        # Print debug information if specified
+        if debug:
+            print(f"Current loop KP parameters set to: {current_loop_KP} \t real: {real_current_loop_KP}")
+            print(f"Current loop KI parameters set to: {current_loop_KI} \t real: {real_current_loop_KI}")
+            print(f"Speed loop KP parameters set to: {speed_loop_KP} \t real: {real_speed_loop_KP}")
+            print(f"Speed loop KI parameters set to: {speed_loop_KI} \t real: {real_speed_loop_KI}")
+            print(f"Position loop KP parameters set to: {position_loop_KP} \t real: {real_position_loop_KP}")
+            print(f"Position loop KI parameters set to: {position_loop_KI} \t real: {real_position_loop_KI}")
+
+        return current_loop_KP, current_loop_KI, speed_loop_KP, speed_loop_KI, position_loop_KP, position_loop_KI
 	
-    def write_pid_parameter_to_ROM(self, current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki,debug=None):
+    def write_pid_parameter_to_ROM(self, current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki, debug=None):
         """
         Writes the PID parameters to ROM.
 
@@ -123,18 +179,58 @@ class ProtocolV1(CanBusGsUsb):
 
         Response Structure:
         - Same as the sent command.
-        """
-        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_WRITE_PID_PARAMETER_TO_ROM, 0x00, current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki])
-        if debug != None:
-            print("Current loop KP set to ", msg.data[2])
-            print("Current loop KI set to ", msg.data[3])
-            print("Speed loop KP set to ", msg.data[4])
-            print("Speed loop KI set to ", msg.data[5])
-            print("Position loop KP set to ", msg.data[6])
-            print("Position loop KI set to ", msg.data[7])
-        return msg.data[2], msg.data[3], msg.data[4], msg.data[5], msg.data[6], msg.data[7]
 
-    def read_acceleration(self,debug=None):
+        Parameters:
+        - current_loop_kp: Current loop Kp parameter. (between 0-256)
+        - current_loop_ki: Current loop Ki parameter. (between 0-256)
+        - speed_loop_kp: Speed loop Kp parameter. (between 0-256)
+        - speed_loop_ki: Speed loop Ki parameter. (between 0-256)
+        - position_loop_kp: Position loop Kp parameter. (between 0-256)
+        - position_loop_ki: Position loop Ki parameter. (between 0-256)
+        - debug: Boolean flag indicating whether to print debug information. (True or False)
+
+        Returns:
+        - pid_parameters: Tuple containing the PID parameters in the order (current_loop_KP, current_loop_KI, speed_loop_KP, speed_loop_KI, position_loop_KP, position_loop_KI).
+        """
+        # Check if the parameters are of correct types
+        if not all(isinstance(param, int) for param in [current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki]):
+            raise TypeError("PID parameters must be integers.")
+
+        # Ensure the parameters are within the valid range
+        if any(param < 0 for param in [current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki]):
+            raise ValueError("PID parameters must be non-negative.")
+        if any(param > 256 for param in [current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki]):
+                raise ValueError("PID parameters can't be up than 256.")
+    
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_WRITE_PID_PARAMETER_TO_ROM, 0x00, current_loop_kp, current_loop_ki, speed_loop_kp, speed_loop_ki, position_loop_kp, position_loop_ki])
+        
+        # Extract response data
+        current_loop_KP = msg.data[2]
+        current_loop_KI = msg.data[3]
+        speed_loop_KP = msg.data[4]
+        speed_loop_KI = msg.data[5]
+        position_loop_KP = msg.data[6]
+        position_loop_KI = msg.data[7]
+
+        real_current_loop_KP = msg.data[2] * (3/256) # assuming that the maximum value of the current loop set by the system is 3
+        real_current_loop_KI = msg.data[3] * (0.1/256) # assuming that the maximum value of the current loop is 0.1
+        real_speed_loop_KP = msg.data[4] * (0.1/256) # assuming that the maximum value of the current loop is 0.1
+        real_speed_loop_KI = msg.data[5] * (0.01/256)  # assuming that the maximum value of the current loop is 0.01
+        real_position_loop_KP = msg.data[6] * (0.1/256)  # assuming that the maximum value of the current loop is 0.1
+        real_position_loop_KI = msg.data[7] * (0.01/256)  # assuming that the maximum value of the current loop is 0.01
+
+        # Print debug information if specified
+        if debug:
+            print(f"Current loop KP parameters set to: {current_loop_KP} \t real: {real_current_loop_KP}")
+            print(f"Current loop KI parameters set to: {current_loop_KI} \t real: {real_current_loop_KI}")
+            print(f"Speed loop KP parameters set to: {speed_loop_KP} \t real: {real_speed_loop_KP}")
+            print(f"Speed loop KI parameters set to: {speed_loop_KI} \t real: {real_speed_loop_KI}")
+            print(f"Position loop KP parameters set to: {position_loop_KP} \t real: {real_position_loop_KP}")
+            print(f"Position loop KI parameters set to: {position_loop_KI} \t real: {real_position_loop_KI}")
+
+        return current_loop_KP, current_loop_KI, speed_loop_KP, speed_loop_KI, position_loop_KP, position_loop_KI
+
+    def read_acceleration(self, debug=None):
         """
         Reads motor acceleration data.
 
@@ -148,16 +244,23 @@ class ProtocolV1(CanBusGsUsb):
         - DATA[2]: Position loop P parameter (0x00)
         - DATA[3]: Position loop I parameter (0x00)
         - DATA[4]: Speed loop P parameter (LSB)
-        - DATA[5]: Speed loop I parameter (MSB)
+        - DATA[5]: Speed loop P parameter (MSB)
         - DATA[6]: Torque loop P parameter (Byte 2)
-        - DATA[7]: Torque loop I parameter (Byte 3)
+        - DATA[7]: Torque loop P parameter (Byte 3)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - acceleration_data: Motor acceleration data in degrees per second per second (dps/s).
         """
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_READ_ACCELERATION, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         acceleration_data = (msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24))
-        if debug != None: print(f"Acceleration: {acceleration_data} dps/s")
+        if debug:
+            print(f"Acceleration: {acceleration_data} dps/s")
         return acceleration_data
 
-    def write_acceleration_to_RAM(self, acceleration,debug=None):
+    def write_acceleration_to_RAM(self, acceleration, debug=None):
         """
         Writes acceleration data to RAM.
 
@@ -170,13 +273,28 @@ class ProtocolV1(CanBusGsUsb):
 
         Response Structure:
         - Same as the host sent
+
+        Parameters:
+        - acceleration: Acceleration data to be written. Should be a uint32_t.
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - acceleration: Acceleration data written.
         """
+        # Ensure acceleration is within the valid range [0, 0xFFFFFFFF] (uint32_t)
+        if acceleration < 0 or acceleration > 0xFFFFFFFF:
+            # Raise a ValueError if acceleration is out of range
+            raise ValueError("Invalid acceleration value. Acceleration must be in the range [0, 4294967295]dps/s")
+
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_WRITE_ACCELERATION_TO_RAM, 0x00, 0x00, 0x00, (acceleration >> 0) & 0xFF,(acceleration >> 8) & 0xFF,(acceleration >> 16) & 0xFF,(acceleration >> 24) & 0xFF])
         acceleration = (msg.data[4] | msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Acceleration set to ", acceleration)
+        
+        if debug:
+            print("Acceleration set to ", acceleration)
+        
         return acceleration
 
-    def read_encoder_data(self,debug=None):
+    def read_encoder_data(self, debug=None):
         """
         Reads the current position of the encoder.
 
@@ -189,18 +307,30 @@ class ProtocolV1(CanBusGsUsb):
         - DATA[1-2]: Encoder position (LSB to MSB)
         - DATA[3-4]: Encoder original position (LSB to MSB)
         - DATA[5-6]: Encoder offset (LSB to MSB)
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - current_position: Current position of the encoder.
+        - original_position: Original position of the encoder.
+        - encoder_offset: Offset of the encoder.
         """
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_READ_ENCODER_DATA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        
+        # Extracting encoder data from the response
         current_position = (msg.data[2] | (msg.data[3] << 8)) * (360 / 65535)
         original_position = (msg.data[4] | (msg.data[5] << 8)) * (360 / 65535)
         encoder_offset = (msg.data[6] | (msg.data[7] << 8)) * (360 / 65535)
-        if debug != None:
+        
+        # Print debug information if specified
+        if debug:
             print(f"Motor position: {current_position}")
             print(f"Motor original position: {original_position}")
             print(f"Motor offset: {encoder_offset}")
+        
         return current_position, original_position, encoder_offset
 	
-    def write_encoder_offset(self, offset,debug=None):
+    def write_encoder_offset(self, offset, debug=None):
         """
         Sets the encoder offset.
 
@@ -213,13 +343,29 @@ class ProtocolV1(CanBusGsUsb):
         Response Structure:
         - DATA[0]: Command byte (0x91)
         - DATA[1-7]: Same as request (echoed)
+
+        Parameters:
+        - offset: Encoder offset to be set. Should be an integer.
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - new_encoder_offset: The new encoder offset.
         """
+        # Ensure offset is within the valid range [0, 65535] (uint16_t)
+        if not isinstance(offset, int) or offset < 0 or offset > 65535:
+            # Raise a ValueError if offset is out of range or not an integer
+            raise ValueError("Invalid encoder offset value. Offset must be an integer in the range [0, 65535]")
+        
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_WRITE_ENCODER_OFFSET, 0x00, 0x00, 0x00, 0x00, 0x00, (offset) & 0xFF, ((offset) & 0xFF00) >> 8])
         new_encoder_offset = (msg.data[6] | (msg.data[7] << 8))
-        if debug != None: print(f"Encoder offset set to {new_encoder_offset}")
+        
+        # Print debug information if specified
+        if debug:
+            print(f"Encoder offset set to {new_encoder_offset}")
+        
         return new_encoder_offset
 	
-    def write_current_position_to_ROM_as_motor_zero_position(self,debug=None):
+    def write_current_position_to_ROM_as_motor_zero_position(self, debug=None):
         """
         Writes the current position to ROM as the motor zero position.
 
@@ -236,13 +382,23 @@ class ProtocolV1(CanBusGsUsb):
         - DATA[1-5]: NULL bytes
         - DATA[6]: Encoder offset (LSB)
         - DATA[7]: Encoder offset (MSB)
+        
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - encoder_offset: The encoder offset.
         """
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_WRITE_CURRENT_POSITION_TO_ROM_AS_MOTOR_ZERO_POSITION, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         encoder_offset = (msg.data[6] | (msg.data[7] << 8))
-        if debug != None: print(f"RX: initial position set to {encoder_offset}")
+        
+        # Print debug information if specified
+        if debug:
+            print(f"Initial position set to {encoder_offset}")
+        
         return encoder_offset
 	
-    def read_multiturn_encoder_position(self,debug=None):
+    def read_multiturn_encoder_position(self, debug=None):
         """
         Reads the multi-turn angle of the motor.
 
@@ -266,7 +422,7 @@ class ProtocolV1(CanBusGsUsb):
         if debug !=None : print(f"Encoder multiturn position: {motor_angle:.2f}°",end='\r')
         return motor_angle
 	
-    def read_singleturn_encoder_position(self,debug=None):
+    def read_singleturn_encoder_position(self, debug=None):
         """
         Reads the single circle angle of the motor.
 
@@ -290,7 +446,7 @@ class ProtocolV1(CanBusGsUsb):
         if debug != None: print(f"Encoder singleturn position: {circle_angle:.2f}°",end='\r')
         return circle_angle
 
-    def motor_off(self,debug=None): 
+    def motor_off(self, debug=None): 
         """
         Turns off the motor, clearing the motor operating status and previously received control commands.
 
@@ -309,7 +465,7 @@ class ProtocolV1(CanBusGsUsb):
         if msg.can_id == self.BASE_ADDR_ID + self.id and msg.data[0]==self.ADDR_SHUTDOWN and msg.data[1]==0x00 and msg.data[2]==0x00 and msg.data[3]==0x00 and msg.data[4]==0x00 and msg.data[5]==0x00 and msg.data[6]==0x00 and msg.data[7]==0x00 : return 1
         else : return 0
 
-    def stop(self,debug=None):
+    def stop(self, debug=None):
         """
         Stops the motor, but does not clear the motor operating state and previously received control commands.
 
@@ -328,7 +484,7 @@ class ProtocolV1(CanBusGsUsb):
         if msg.can_id == self.BASE_ADDR_ID + self.id and msg.data[0]==self.ADDR_STOP and msg.data[1]==0x00 and msg.data[2]==0x00 and msg.data[3]==0x00 and msg.data[4]==0x00 and msg.data[5]==0x00 and msg.data[6]==0x00 and msg.data[7]==0x00 : return 1
         else : return 0
 	
-    def running(self,debug=None):
+    def running(self, debug=None):
         """
         Resumes motor operation from a motor stop command (Recovers control mode before stopping the motor).
 
@@ -347,7 +503,7 @@ class ProtocolV1(CanBusGsUsb):
         if msg.can_id == self.BASE_ADDR_ID + self.id and msg.data[0]==self.ADDR_RUNNING and msg.data[1]==0x00 and msg.data[2]==0x00 and msg.data[3]==0x00 and msg.data[4]==0x00 and msg.data[5]==0x00 and msg.data[6]==0x00 and msg.data[7]==0x00 : return 1
         else : return 0
 
-    def read_motor_status_1_error_flag(self,debug=None):
+    def read_motor_status_1_error_flag(self, debug=None):
         """
         Reads the motor's error status, temperature, voltage, and other information.
 
@@ -396,7 +552,7 @@ class ProtocolV1(CanBusGsUsb):
                 if error_state & self.ENCODER_CALIB_ERROR:  print("Error status: encoder calibration error")
         return motor_temp,voltage,error_state
 	
-    def read_clear_motor_error_flag(self,debug=None):
+    def read_clear_motor_error_flag(self, debug=None):
         """
         Clears the error status of the current motor and retrieves motor information.
 
@@ -446,7 +602,7 @@ class ProtocolV1(CanBusGsUsb):
                 if error_state & self.ENCODER_CALIB_ERROR:print("Error status: encoder calibration error")
         return motor_temp, voltage, error_state
 	
-    def read_motor_status_2(self,debug=None):
+    def read_motor_status_2(self, debug=None):
         """
         Reads motor temperature, voltage, speed, and encoder position.
 
@@ -482,7 +638,7 @@ class ProtocolV1(CanBusGsUsb):
             print(f"Encoder position: {encoder_position}")
         return motor_temp, torque_current, motor_speed, encoder_position
     
-    def read_motor_status_3(self,debug=None):
+    def read_motor_status_3(self, debug=None):
         """
         Reads motor status 3, which includes phase current data.
 
@@ -518,7 +674,7 @@ class ProtocolV1(CanBusGsUsb):
             print(f"Phase C current: {phase_C_current}A")
         return motor_temp, phase_A_current, phase_B_current, phase_C_current
 
-    def torque_closed_loop_control(self, torque,debug=None):
+    def torque_closed_loop_control(self, torque, debug=None):
         """
         Controls the torque current output of the motor.
 
@@ -558,7 +714,7 @@ class ProtocolV1(CanBusGsUsb):
             print(f"Motor position value (0~16383): {encoder_position}")
         return motor_temp, torque_current, motor_speed, encoder_position
 
-    def speed_closed_loop_control(self, speed,debug=None):
+    def speed_closed_loop_control(self, speed, debug=None):
         """
         Controls the speed of the motor.
 
@@ -597,7 +753,7 @@ class ProtocolV1(CanBusGsUsb):
             print(f"Motor position value (0~16383): {encoder_position}")
         return motor_temp, torque_current, motor_speed, encoder_position
 
-    def position_closed_loop_control_1(self, position,debug=None):
+    def position_closed_loop_control_1(self, position, debug=None):
         """
         Controls the position of the motor in multi-turn angle.
 
@@ -636,7 +792,7 @@ class ProtocolV1(CanBusGsUsb):
             print(f"Motor angle: {motor_angle}°")
         return motor_temp, torque_current, motor_speed, motor_angle
 
-    def position_closed_loop_control_2(self, speed, position,debug=None):
+    def position_closed_loop_control_2(self, speed, position, debug=None):
         """
         Controls the position of the motor (multi-turn angle) with speed limit.
 
@@ -678,7 +834,7 @@ class ProtocolV1(CanBusGsUsb):
             print(f"Motor angle: {motor_angle}°")
         return motor_temp, torque_current, motor_speed, motor_angle
 
-    def position_closed_loop_control_3(self, direction, position,debug=None):
+    def position_closed_loop_control_3(self, direction, position, debug=None):
         """
         Controls the position of the motor (single-turn angle) with specified direction.
 
@@ -720,7 +876,7 @@ class ProtocolV1(CanBusGsUsb):
             print(f"Motor angle: {motor_angle}°")
         return motor_temp, torque_current, motor_speed, motor_angle
 	
-    def position_closed_loop_control_4(self, speed, direction, position,debug=None):
+    def position_closed_loop_control_4(self, speed, direction, position, debug=None):
         """
         Controls the position of the motor (single-turn angle) with specified direction and speed limit.
 
@@ -751,6 +907,17 @@ class ProtocolV1(CanBusGsUsb):
         - motor_angle: Current motor angle in degrees.
         """
         angle_control = int(position * 100)
+
+        # Ensure target_position is within the valid range [0, 0xFFFFFFFF] (int32_t)
+        if angle_control < 0 or angle_control > 0xFFFFFFFF:
+            # Raise a ValueError if target_position is out of range
+            raise ValueError("Invalid target position value. Target position must be in the range [0, 42949672.95]°")
+        
+        # Ensure direction is within the valid range [0, 0xFFFFFFFF] (int32_t)
+        if angle_control < 0 or angle_control > 0xFFFFFFFF:
+            # Raise a ValueError if target_position is out of range
+            raise ValueError("Invalid target position value. Target position must be in the range [0, 42949672.95]°")
+
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_WRITE_SINGLETURN_SPEED_DIRECTION_CLOSED_LOOP_CONTROL,direction & 0xFF,(speed >> 0) & 0xFF, (speed >> 8) & 0xFF,
 (angle_control >> 0) & 0xFF, (angle_control >> 8) & 0xFF,0x00, 0x00])
         while True:

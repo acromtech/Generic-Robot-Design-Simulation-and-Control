@@ -1,5 +1,5 @@
 from CanBusGsUsb import CanBusGsUsb
-
+import sys
 class ProtocolV2(CanBusGsUsb):
     # Attributes
     BASE_ADDR_ID = 0x140
@@ -54,26 +54,17 @@ class ProtocolV2(CanBusGsUsb):
     ADDR_POSITION_MULTITURN_SPEED_CLOSED_LOOP_CONTROL = 0xA4
     ADDR_POSITION_SINGLETURN_DIRECTION_CLOSED_LOOP_CONTROL = 0xA5
     ADDR_POSITION_SINGLETURN_SPEED_DIRECTION_CLOSED_LOOP_CONTROL = 0xA6
-    ADDR_MULTITURN_INCREMENTAL_POSITION_CONTROL = 0xA7  # A VERIFER
-    ADDR_MULTITURN_INCREMENTAL_POSITION_CONTROL = 0xA8 # A VERIFER
+    ADDR_POSITION_MULTITURN_INCREMENTAL_CLOSED_LOOP_CONTROL = 0xA7
+    ADDR_POSITION_MULTITURN_INCREMENTAL_SPEED_CLOSED_LOOP_CONTROL = 0xA8
 
     ADDR_READ_RUNNING_MODE = 0x70
     ADDR_READ_POWER_VALUE = 0x71
     ADDR_READ_BATTERY_VOLTAGE = 0x72
-    ADDR_TF = 0x73
+    ADDR_FEEDFORWARD_SETTING = 0x73
     ADDR_SYSTEM_RESET = 0x76
     ADDR_BRAKE_OPENING = 0x77
     ADDR_BRAKE_CLOSE = 0x78
     ADDR_CAN_ID_SETTING_AND_READING = 0x79
-
-    MOTOR_STALL = 0x0002
-    LOW_PRESSURE = 0x0004
-    OVERVOLTAGE = 0x0008
-    OVERCURRENT = 0x0010
-    POWER_OVERRUN = 0x0040
-    SPEEDING = 0x0100
-    MOTOR_TEMP_OVER = 0x1000
-    ENCODER_CALIB_ERROR = 0x2000
 
     def __init__(self,id:int,reducer_ratio:int,can_bus:CanBusGsUsb):
         self.id = id
@@ -81,1763 +72,2278 @@ class ProtocolV2(CanBusGsUsb):
         self.can_bus = can_bus
 
 
-    def read_position_loop_Kp(self,debug=None):
+    def read_position_loop_Kp(self, debug=None):
         """
-        The host sends the command to read the current Position loop KP parameters.
+        Reads the current Position loop KP parameters from the drive.
 
-        Data field Description Data
-        DATA[0] command byte 0x30
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Command Structure:
+        - DATA[0]: Command byte (0x30)
+        - DATA[1-7]: NULL bytes
 
-        Drive reply(one frame)
-        The drive reply data contains the Kp parameter of the position loop, which is converted usingtheQformat (Q24)
-        eg,kp=0.25,Position loop after conversion kp, anglePidKp=0.25*16777216=4194304;
+        Response Structure:
+        - DATA[0]: Command byte (0x30)
+        - DATA[1-4]: Position loop Kp parameters (Q24 format, converted from float)
 
-        Data field Description Data
-        DATA[0] command byte 0x30
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] Position loop Kp parameters low byte 1 DATA[4] = *(uint8_t *)(&anglePidKp)
-        DATA[5] Position loop Kp parameters byte 2 DATA[5] = *((uint8_t *)(&anglePidKp)+1)
-        DATA[6] Position loop Kp parameters byte 3 DATA[6] = *((uint8_t *)(&anglePidKp)+2)
-        DATA[7] Position loop Kp parameters byte 4 DATA[7] = *((uint8_t *)(&anglePidKp)+3)
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - position_loop_KP: Position loop KP parameters (float).
         """
+        # Send command to read the current Position loop KP parameters
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_POSITION_LOOP_KP, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        position_loop_KP = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print(f"Position loop KP parameters: {position_loop_KP}")
+                                        data=[self.ADDR_READ_POSITION_LOOP_KP, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract Position loop KP parameters from the response and convert from Q24 to float
+        position_loop_KP_q24 = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+        position_loop_KP = position_loop_KP_q24 / 16777216.0  # Conversion from Q24 to float
+
+        # Print debug information if enabled
+        if debug:
+            print(f"Position loop KP parameters: {position_loop_KP}")
+
         return position_loop_KP
-    
-    def read_position_loop_Ki(self,debug=None):
-        """
-        The host sends the command to read the current Position loop Ki parameters. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x31
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
 
-        Drive reply(one frame)
-        The drive reply data contains the Ki parameter of the position loop,which is converted using the Q format (Q24)
-        eg, ki=0.25,Position loop after conversion ki,anglePidKi=0.25*16777216=4194304;
-
-        Data field Description Data
-        DATA[0] command byte 0x31
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] Position loop Ki parameters low byte 1 DATA[4] = *(uint8_t *)(&anglePidKi)
-        DATA[5] Position loop Ki parameters byte 2 DATA[5] = *((uint8_t *)(&anglePidKi)+1)
-        DATA[6] Position loop Ki parameters byte 3 DATA[6] = *((uint8_t *)(&anglePidKi)+2)
-        DATA[7] Position loop Ki parameters byte 4 DATA[7] = *((uint8_t *)(&anglePidKi)+3)
+    def read_position_loop_Ki(self, debug=None):
         """
+        Reads the current Position loop Ki parameters from the drive.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x31)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x31)
+        - DATA[1-4]: Position loop Ki parameters (Q24 format, converted from float)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - position_loop_KI: Position loop Ki parameters (float).
+        """
+        # Send command to read the current Position loop Ki parameters
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_POSITION_LOOP_KI, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        position_loop_KI = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print(f"Position loop KI parameters: {position_loop_KI}")
+                                    data=[self.ADDR_READ_POSITION_LOOP_KI, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract Position loop Ki parameters from the response and convert from Q24 to float
+        position_loop_KI_q24 = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+        position_loop_KI = position_loop_KI_q24 / 16777216.0  # Conversion from Q24 to float
+
+        # Print debug information if enabled
+        if debug:
+            print(f"Position loop KI parameters: {position_loop_KI}")
+
         return position_loop_KI
-    
-    def read_speed_loop_Kp(self,debug=None):
-        """
-        The host sends the command to read the current Speed loop KP parameters. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x32
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
 
-        Drive reply(one frame)
-        The drive reply data contains the Kp parameter of the speed loop,which is converted using the Q format (Q24)
-        eg, kp=0.25,speed loop after conversion kp,speedPidKp=0.25*16777216=4194304;
-        
-        Data field Description Data
-        DATA[0] command byte 0x32
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] speed loop Kp parameters low byte 1 DATA[4] = *(uint8_t *)(&speedPidKp)
-        DATA[5] speed loop Kp parameters byte 2 DATA[5] = *((uint8_t *)(&speedPidKp)+1)
-        DATA[6] speed loop Kp parameters byte 3 DATA[6] = *((uint8_t *)(&speedPidKp)+2)
-        DATA[7] speed loop Kp parameters byte 4 DATA[7] = *((uint8_t *)(&speedPidKp)+3)
+    def read_speed_loop_Kp(self, debug=None):
         """
+        Reads the current Speed loop KP parameters from the drive.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x32)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x32)
+        - DATA[1-4]: Speed loop KP parameters (Q24 format, converted from float)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - speed_loop_KP: Speed loop KP parameters (float).
+        """
+        # Send command to read the current Speed loop KP parameters
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_SPEED_LOOP_KP, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        speed_loop_KP = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print(f"Speed loop KP parameters: {speed_loop_KP}")
+                                    data=[self.ADDR_READ_SPEED_LOOP_KP, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract Speed loop KP parameters from the response and convert from Q24 to float
+        speed_loop_KP_q24 = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+        speed_loop_KP = speed_loop_KP_q24 / 16777216.0  # Conversion from Q24 to float
+
+        # Print debug information if enabled
+        if debug:
+            print(f"Speed loop KP parameters: {speed_loop_KP}")
+
         return speed_loop_KP
-    
-    def read_speed_loop_Ki(self,debug=None):
-        """
-        The host sends the command to read the current Speed loop Ki parameters. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x33
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
 
-        Drive reply(one frame)
-        The drive reply data contains the Ki parameter of the speed loop,which is converted using the Q format (Q24)
-        eg, ki=0.25,speed loop after conversion ki,speedPidKi=0.25*16777216=4194304;
-
-        Data field Description Data
-        DATA[0] command byte 0x33
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] speed loop Ki parameters low byte 1 DATA[4] = *(uint8_t *)(&speedPidKi)
-        DATA[5] speed loop Ki parameters byte 2 DATA[5] = *((uint8_t *)(&speedPidKi)+1)
-        DATA[6] speed loop Ki parameters byte 3 DATA[6] = *((uint8_t *)(&speedPidKi)+2)
-        DATA[7] speed loop Ki parameters byte 4 DATA[7] = *((uint8_t *)(&speedPidKi)+3)
+    def read_speed_loop_Ki(self, debug=None):
         """
+        Reads the current Speed loop Ki parameters from the drive.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x33)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x33)
+        - DATA[1-4]: Speed loop Ki parameters (Q24 format, converted from float)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - speed_loop_KI: Speed loop Ki parameters (float).
+        """
+        # Send command to read the current Speed loop Ki parameters
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_SPEED_LOOP_KI, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        speed_loop_KI = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print(f"Speed loop KI parameters: {speed_loop_KI}")
+                                    data=[self.ADDR_READ_SPEED_LOOP_KI, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract Speed loop Ki parameters from the response and convert from Q24 to float
+        speed_loop_KI_q24 = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+        speed_loop_KI = speed_loop_KI_q24 / 16777216.0  # Conversion from Q24 to float
+
+        # Print debug information if enabled
+        if debug:
+            print(f"Speed loop KI parameters: {speed_loop_KI}")
+
         return speed_loop_KI
-    
-    def read_current_loop_Kp(self,debug=None):
-        """
-        The host sends the command to read the Current loop Kp parameters. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x34
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
-        
-        Drive reply(one frame)
-        The drive reply data contains the Kp parameter of the current loop,which is converted using the Q format (Q24)
-        eg, kp=0.25,current loop after conversion kp,torquePidKp=0.25*16777216=4194304;
 
-        Data field Description Data
-        DATA[0] command byte 0x34
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] current loop Kp parameters low byte 1 DATA[4] = *(uint8_t *)(&torquePidKp)
-        DATA[5] current loop Kp parameters byte 2 DATA[5] = *((uint8_t *)(&torquePidKp)+1)
-        DATA[6] current loop Kp parameters byte 3 DATA[6] = *((uint8_t *)(&torquePidKp)+2)
-        DATA[7] current loop Kp parameters byte 4 DATA[7] = *((uint8_t *)(&torquePidKp)+3)
+    def read_current_loop_Kp(self, debug=None):
         """
+        Reads the current Current loop Kp parameters from the drive.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x34)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x34)
+        - DATA[1-4]: Current loop Kp parameters (Q24 format, converted from float)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - current_loop_KP: Current loop Kp parameters (float).
+        """
+        # Send command to read the current Current loop Kp parameters
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_CURRENT_LOOP_KP, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        current_loop_KP = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print(f"Current loop KP parameters: {current_loop_KP}")
+                                    data=[self.ADDR_READ_CURRENT_LOOP_KP, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract Current loop Kp parameters from the response and convert from Q24 to float
+        current_loop_KP_q24 = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+        current_loop_KP = current_loop_KP_q24 / 16777216.0  # Conversion from Q24 to float
+
+        # Print debug information if enabled
+        if debug:
+            print(f"Current loop KP parameters: {current_loop_KP}")
+
         return current_loop_KP
-    
-    def read_current_loop_Ki(self,debug=None):
-        """
-        The host sends the command to read the current Current loop Ki parameters. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x35
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
 
-        Drive reply(one frame)
-        The drive reply data contains the Ki parameter of the current loop,which is converted using the Q format (Q24)
-        eg, ki=0.25,current loop after conversion ki,torquePidKi=0.25*16777216=4194304;
-
-        Data field Description Data
-        DATA[0] command byte 0x35
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] current loop Ki parameters low byte 1 DATA[4] = *(uint8_t *)(&torquePidKi)
-        DATA[5] current loop Ki parameters byte 2 DATA[5] = *((uint8_t *)(&torquePidKi)+1)
-        DATA[6] current loop Ki parameters byte 3 DATA[6] = *((uint8_t *)(&torquePidKi)+2)
-        DATA[7] current loop Ki parameters byte 4 DATA[7] = *((uint8_t *)(&torquePidKi)+3)
+    def read_current_loop_Ki(self, debug=None):
         """
+        Reads the current Current loop Ki parameters from the drive.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x35)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x35)
+        - DATA[1-4]: Current loop Ki parameters (Q24 format, converted from float)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - current_loop_KI: Current loop Ki parameters (float).
+        """
+        # Send command to read the current Current loop Ki parameters
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_CURRENT_LOOP_KI, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        current_loop_KI = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print(f"Current loop KI parameters: {current_loop_KI}")
+                                    data=[self.ADDR_READ_CURRENT_LOOP_KI, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract Current loop Ki parameters from the response and convert from Q24 to float
+        current_loop_KI_q24 = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+        current_loop_KI = current_loop_KI_q24 / 16777216.0  # Conversion from Q24 to float
+
+        # Print debug information if enabled
+        if debug:
+            print(f"Current loop KI parameters: {current_loop_KI}")
+
         return current_loop_KI
 
 
-    def write_position_loop_Kp_to_RAM(self,position_loop_kp,debug=None):
+    def write_position_loop_Kp_to_RAM(self, position_loop_kp, debug=None):
         """
-        The host sends the command to write the Kp parameters of position loop to the RAM, andthewriteparameters are invalid after the power off,and the Q format (Q24) is used for conversion. eg，Kp=0.25,position loop after conversion Kp,anglePidKp=0.25*16777216=4194304;
-        
-        Data field Description Data
-        DATA[0] command byte 0x36
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] Position loop Kp parameters low byte 1 DATA[4] = *(uint8_t *)(&anglePidKp)
-        DATA[5] Position loop Kp parameters byte 2 DATA[5] = *((uint8_t *)(&anglePidKp)+1)
-        DATA[6] Position loop Kp parameters byte 3 DATA[6] = *((uint8_t *)(&anglePidKp)+2)
-        DATA[7] Position loop Kp parameters byte 4 DATA[7] = *((uint8_t *)(&anglePidKp)+3)
+        Writes the Kp parameters of the position loop to the RAM.
 
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the reply command is the sameasthereceived command.
+        Command Structure:
+        - DATA[0]: Command byte (0x36)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Position loop Kp parameters (Q24 format)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - position_loop_kp: Position loop Kp parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - position_loop_kp_confirmed: Position loop Kp parameters (float) as confirmed by the drive.
         """
+        # Convert position_loop_kp from float to Q24 format
+        position_loop_kp_q24 = int(position_loop_kp * 16777216)
+
+        # Send command to write the Kp parameters of the position loop to the RAM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_POSITION_LOOP_KP_TO_RAM, 0x00, 0x00, 0x00, (position_loop_kp >> 0) & 0xFF,(position_loop_kp >> 8) & 0xFF,(position_loop_kp >> 16) & 0xFF,(position_loop_kp >> 24) & 0xFF])
-        position_loop_kp = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Position loop Kp set to ", position_loop_kp)
-        return position_loop_kp
-    
-    def write_position_loop_Ki_to_RAM(self,position_loop_ki,debug=None):
-        """
-        The host sends the command to write the Ki parameters of position loop to the RAM, and the write parameters are invalid after the power off,and the Q format (Q24) is used for conversion. 
-        eg, Ki=0.25,position loop after conversion Ki,anglePidKi=0.25*16777216=4194304;
+                                    data=[self.ADDR_WRITE_POSITION_LOOP_KP_TO_RAM, 0x00, 0x00, 0x00, 
+                                            (position_loop_kp_q24 >> 0) & 0xFF, (position_loop_kp_q24 >> 8) & 0xFF, 
+                                            (position_loop_kp_q24 >> 16) & 0xFF, (position_loop_kp_q24 >> 24) & 0xFF])
 
-        Data field Description Data
-        DATA[0] command byte 0x37
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] Position loop Ki parameters low byte 1 DATA[4] = *(uint8_t *)(&anglePidKi)
-        DATA[5] Position loop Ki parameters byte 2 DATA[5] = *((uint8_t *)(&anglePidKi)+1)
-        DATA[6] Position loop Ki parameters byte 3 DATA[6] = *((uint8_t *)(&anglePidKi)+2)
-        DATA[7] Position loop Ki parameters byte 4 DATA[7] = *((uint8_t *)(&anglePidKi)+3)
+        # Extract confirmation of Position loop Kp parameters from the response
+        position_loop_kp_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
 
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent.
+        # Convert confirmed position_loop_kp from Q24 format to float
+        position_loop_kp_confirmed_float = position_loop_kp_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Position loop Kp set to ", position_loop_kp_confirmed_float)
+
+        return position_loop_kp_confirmed_float
+
+    def write_position_loop_Ki_to_RAM(self, position_loop_ki, debug=None):
         """
+        Writes the Ki parameters of the position loop to the RAM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x37)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Position loop Ki parameters (Q24 format)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - position_loop_ki: Position loop Ki parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - position_loop_ki_confirmed: Position loop Ki parameters (float) as confirmed by the drive.
+        """
+        # Convert position_loop_ki from float to Q24 format
+        position_loop_ki_q24 = int(position_loop_ki * 16777216)
+
+        # Send command to write the Ki parameters of the position loop to the RAM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_POSITION_LOOP_KI_TO_RAM, 0x00, 0x00, 0x00, (position_loop_ki >> 0) & 0xFF,(position_loop_ki >> 8) & 0xFF,(position_loop_ki >> 16) & 0xFF,(position_loop_ki >> 24) & 0xFF])
-        position_loop_ki = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Position loop Ki set to ", position_loop_ki)
-        return position_loop_ki
-    
-    def write_speed_loop_Kp_to_RAM(self,speed_loop_kp,debug=None):
-        """
-        The host sends the command to write the Kp parameters of speed loop to the RAM, and the write parameters are invalid after the power off,and the Q format (Q24) is used for conversion. 
-        eg, Kp=0.25,speed loop after conversion kp,speedPidKp=0.25*16777216=4194304;
+                                    data=[self.ADDR_WRITE_POSITION_LOOP_KI_TO_RAM, 0x00, 0x00, 0x00, 
+                                            (position_loop_ki_q24 >> 0) & 0xFF, (position_loop_ki_q24 >> 8) & 0xFF, 
+                                            (position_loop_ki_q24 >> 16) & 0xFF, (position_loop_ki_q24 >> 24) & 0xFF])
 
-        Data field Description Data
-        DATA[0] command byte 0x38
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] speed loop Kp parameters low byte 1 DATA[4] = *(uint8_t *)(&speedPidKp)
-        DATA[5] speed loop Kp parameters byte 2 DATA[5] = *((uint8_t *)(&speedPidKp)+1)
-        DATA[6] speed loop Kp parameters byte 3 DATA[6] = *((uint8_t *)(&speedPidKp)+2)
-        DATA[7] speed loop Kp parameters byte 4 DATA[7] = *((uint8_t *)(&speedPidKp)+3)
+        # Extract confirmation of Position loop Ki parameters from the response
+        position_loop_ki_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
 
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent
+        # Convert confirmed position_loop_ki from Q24 format to float
+        position_loop_ki_confirmed_float = position_loop_ki_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Position loop Ki set to ", position_loop_ki_confirmed_float)
+
+        return position_loop_ki_confirmed_float
+
+    def write_speed_loop_Kp_to_RAM(self, speed_loop_kp, debug=None):
         """
+        Writes the Kp parameters of the speed loop to the RAM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x38)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Speed loop Kp parameters (Q24 format)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - speed_loop_kp: Speed loop Kp parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - speed_loop_kp_confirmed: Speed loop Kp parameters (float) as confirmed by the drive.
+        """
+        # Convert speed_loop_kp from float to Q24 format
+        speed_loop_kp_q24 = int(speed_loop_kp * 16777216)
+
+        # Send command to write the Kp parameters of the speed loop to the RAM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_SPEED_LOOP_KP_TO_RAM, 0x00, 0x00, 0x00, (speed_loop_kp >> 0) & 0xFF,(speed_loop_kp >> 8) & 0xFF,(speed_loop_kp >> 16) & 0xFF,(speed_loop_kp >> 24) & 0xFF])
-        speed_loop_kp = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Speed loop Kp set to ", speed_loop_kp)
-        return speed_loop_kp
-    
-    def write_speed_loop_Ki_to_RAM(self,speed_loop_ki,debug=None):
-        """
-        The host sends the command to write the Ki parameters of speed loop to the RAM, and the write parameters are invalid after the power is turned off,and the Q format (Q24) is used for conversion. 
-        eg, Ki=0.25,speed loop after conversion Ki,speedPidKi=0.25*16777216=4194304;
+                                    data=[self.ADDR_WRITE_SPEED_LOOP_KP_TO_RAM, 0x00, 0x00, 0x00, 
+                                            (speed_loop_kp_q24 >> 0) & 0xFF, (speed_loop_kp_q24 >> 8) & 0xFF, 
+                                            (speed_loop_kp_q24 >> 16) & 0xFF, (speed_loop_kp_q24 >> 24) & 0xFF])
 
-        Data field Description Data
-        DATA[0] command byte 0x39
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] speed loop Ki parameters low byte 1 DATA[4] = *(uint8_t *)(&speedPidKi)
-        DATA[5] speed loop Ki parameters byte 2 DATA[5] = *((uint8_t *)(&speedPidKi)+1)
-        DATA[6] speed loop Ki parameters byte 3 DATA[6] = *((uint8_t *)(&speedPidKi)+2)
-        DATA[7] speed loop Ki parameters byte 4 DATA[7] = *((uint8_t *)(&speedPidKi)+3)
+        # Extract confirmation of Speed loop Kp parameters from the response
+        speed_loop_kp_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
 
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent.
+        # Convert confirmed speed_loop_kp from Q24 format to float
+        speed_loop_kp_confirmed_float = speed_loop_kp_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Speed loop Kp set to ", speed_loop_kp_confirmed_float)
+
+        return speed_loop_kp_confirmed_float
+
+    def write_speed_loop_Ki_to_RAM(self, speed_loop_ki, debug=None):
         """
+        Writes the Ki parameters of the speed loop to the RAM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x39)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Speed loop Ki parameters (Q24 format)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - speed_loop_ki: Speed loop Ki parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - speed_loop_ki_confirmed: Speed loop Ki parameters (float) as confirmed by the drive.
+        """
+        # Convert speed_loop_ki from float to Q24 format
+        speed_loop_ki_q24 = int(speed_loop_ki * 16777216)
+
+        # Send command to write the Ki parameters of the speed loop to the RAM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_SPEED_LOOP_KI_TO_RAM, 0x00, 0x00, 0x00, (speed_loop_ki >> 0) & 0xFF,(speed_loop_ki >> 8) & 0xFF,(speed_loop_ki >> 16) & 0xFF,(speed_loop_ki >> 24) & 0xFF])
-        speed_loop_ki = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Speed loop Ki set to ", speed_loop_ki)
-        return speed_loop_ki
-    
-    def write_current_loop_Kp_to_RAM(self,current_loop_kp,debug=None):
-        """
-        The host sends the command to write the Kp parameters of current loop to the RAM, and write parameters are invalid after the power off,and the Q format (Q24) is used for conversion. 
-        eg, kp=0.25,current loop after conversion kp,torquePidKp=0.25*16777216=4194304;
+                                    data=[self.ADDR_WRITE_SPEED_LOOP_KI_TO_RAM, 0x00, 0x00, 0x00, 
+                                            (speed_loop_ki_q24 >> 0) & 0xFF, (speed_loop_ki_q24 >> 8) & 0xFF, 
+                                            (speed_loop_ki_q24 >> 16) & 0xFF, (speed_loop_ki_q24 >> 24) & 0xFF])
 
-        Data field Description Data
-        DATA[0] command byte 0x3A
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] current loop Kp parameters low byte 1 DATA[4] = *(uint8_t *)(&torquePidKp)
-        DATA[5] current loop Kp parameters byte 2 DATA[5] = *((uint8_t *)(&torquePidKp)+1)
-        DATA[6] current loop Kp parameters byte 3 DATA[6] = *((uint8_t *)(&torquePidKp)+2)
-        DATA[7] current loop Kp parameters byte 4 DATA[7] = *((uint8_t *)(&torquePidKp)+3)
+        # Extract confirmation of Speed loop Ki parameters from the response
+        speed_loop_ki_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
 
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent.
+        # Convert confirmed speed_loop_ki from Q24 format to float
+        speed_loop_ki_confirmed_float = speed_loop_ki_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Speed loop Ki set to ", speed_loop_ki_confirmed_float)
+
+        return speed_loop_ki_confirmed_float
+
+    def write_current_loop_Kp_to_RAM(self, current_loop_kp, debug=None):
         """
+        Writes the Kp parameters of the current loop to the RAM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x3A)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Current loop Kp parameters (Q24 format)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - current_loop_kp: Current loop Kp parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - current_loop_kp_confirmed: Current loop Kp parameters (float) as confirmed by the drive.
+        """
+        # Convert current_loop_kp from float to Q24 format
+        current_loop_kp_q24 = int(current_loop_kp * 16777216)
+
+        # Send command to write the Kp parameters of the current loop to the RAM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_CURRENT_LOOP_KP_TO_RAM, 0x00, 0x00, 0x00, (current_loop_kp >> 0) & 0xFF,(current_loop_kp >> 8) & 0xFF,(current_loop_kp >> 16) & 0xFF,(current_loop_kp >> 24) & 0xFF])
-        current_loop_kp = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Current loop Kp set to ", current_loop_kp)
-        return current_loop_kp
-    
-    def write_current_loop_Ki_to_RAM(self,current_loop_ki,debug=None):
-        """
-        The host sends the command to write the Ki parameters of current loop to the RAM, and the write parameters are invalid after the power is turned off,and the Q format (Q24) is used for conversion. 
-        eg, Ki=0.25,current loop after conversion Ki,torquePidKi=0.25*16777216=4194304;
+                                    data=[self.ADDR_WRITE_CURRENT_LOOP_KP_TO_RAM, 0x00, 0x00, 0x00, 
+                                            (current_loop_kp_q24 >> 0) & 0xFF, (current_loop_kp_q24 >> 8) & 0xFF, 
+                                            (current_loop_kp_q24 >> 16) & 0xFF, (current_loop_kp_q24 >> 24) & 0xFF])
 
-        Data field Description Data
-        DATA[0] command byte 0x3B
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] current loop Ki parameters low byte 1 DATA[4] = *(uint8_t *)(&torquePidKi)
-        DATA[5] current loop Ki parameters byte 2 DATA[5] = *((uint8_t *)(&torquePidKi)+1)
-        DATA[6] current loop Ki parameters byte 3 DATA[6] = *((uint8_t *)(&torquePidKi)+2)
-        DATA[7] current loop Ki parameters byte 4 DATA[7] = *((uint8_t *)(&torquePidKi)+3)
+        # Extract confirmation of Current loop Kp parameters from the response
+        current_loop_kp_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
 
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent.
+        # Convert confirmed current_loop_kp from Q24 format to float
+        current_loop_kp_confirmed_float = current_loop_kp_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Current loop Kp set to ", current_loop_kp_confirmed_float)
+
+        return current_loop_kp_confirmed_float
+
+    def write_current_loop_Ki_to_RAM(self, current_loop_ki, debug=None):
         """
+        Writes the Ki parameters of the current loop to the RAM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x3B)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Current loop Ki parameters (Q24 format)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - current_loop_ki: Current loop Ki parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - current_loop_ki_confirmed: Current loop Ki parameters (float) as confirmed by the drive.
+        """
+        # Convert current_loop_ki from float to Q24 format
+        current_loop_ki_q24 = int(current_loop_ki * 16777216)
+
+        # Send command to write the Ki parameters of the current loop to the RAM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_CURRENT_LOOP_KI_TO_RAM, 0x00, 0x00, 0x00, (current_loop_ki >> 0) & 0xFF,(current_loop_ki >> 8) & 0xFF,(current_loop_ki >> 16) & 0xFF,(current_loop_ki >> 24) & 0xFF])
-        current_loop_ki = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Current loop Ki set to ", current_loop_ki)
-        return current_loop_ki
+                                    data=[self.ADDR_WRITE_CURRENT_LOOP_KI_TO_RAM, 0x00, 0x00, 0x00, 
+                                            (current_loop_ki_q24 >> 0) & 0xFF, (current_loop_ki_q24 >> 8) & 0xFF, 
+                                            (current_loop_ki_q24 >> 16) & 0xFF, (current_loop_ki_q24 >> 24) & 0xFF])
+
+        # Extract confirmation of Current loop Ki parameters from the response
+        current_loop_ki_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+
+        # Convert confirmed current_loop_ki from Q24 format to float
+        current_loop_ki_confirmed_float = current_loop_ki_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Current loop Ki set to ", current_loop_ki_confirmed_float)
+
+        return current_loop_ki_confirmed_float
 
 
-    def write_position_loop_Kp_to_ROM(self,position_loop_kp,debug=None):
+    def write_position_loop_Kp_to_ROM(self, position_loop_kp, debug=None):
         """
-        The host sends the command to write the Kp parameters of position loop to the ROM, and the write parameters are valid after the power off,and the Q format (Q24) is used for conversion. 
-        eg, kp=0.25,position loop after conversion kp,anglePidKp=0.25*16777216=4194304;
+        Writes the Kp parameters of the position loop to the ROM.
 
-        Data field Description Data
-        DATA[0] command byte 0x3C
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] position loop Kp parameters low byte 1 DATA[4] = *(uint8_t *)(&anglePidKp)
-        DATA[5] position loop Kp parameters byte 2 DATA[5] = *((uint8_t *)(&anglePidKp)+1)
-        DATA[6] position loop Kp parameters byte 3 DATA[6] = *((uint8_t *)(&anglePidKp)+2)
-        DATA[7] position loop Kp parameters byte 4 DATA[7] = *((uint8_t *)(&anglePidKp)+3)
+        Command Structure:
+        - DATA[0]: Command byte (0x3C)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Position loop Kp parameters (Q24 format)
 
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent.
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - position_loop_kp: Position loop Kp parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - position_loop_kp_confirmed: Position loop Kp parameters (float) as confirmed by the drive.
         """
+        # Convert position_loop_kp from float to Q24 format
+        position_loop_kp_q24 = int(position_loop_kp * 16777216)
+
+        # Send command to write the Kp parameters of the position loop to the ROM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_POSITION_LOOP_KP_TO_ROM, 0x00, 0x00, 0x00, (position_loop_kp >> 0) & 0xFF,(position_loop_kp >> 8) & 0xFF,(position_loop_kp >> 16) & 0xFF,(position_loop_kp >> 24) & 0xFF])
-        position_loop_kp = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Position loop Kp set to ", position_loop_kp)
-        return position_loop_kp
-    
-    def write_position_loop_Ki_to_ROM(self,position_loop_ki,debug=None):
-        """
-        The host sends the command to write the Ki parameters of position loop to the ROM, and the write parameters are valid after the power off,and the Q format (Q24) is used for conversion. 
-        eg, ki=0.25,position loop after conversion Ki,anglePidKi=0.25*16777216=4194304;
+                                    data=[self.ADDR_WRITE_POSITION_LOOP_KP_TO_ROM, 0x00, 0x00, 0x00, 
+                                            (position_loop_kp_q24 >> 0) & 0xFF, (position_loop_kp_q24 >> 8) & 0xFF, 
+                                            (position_loop_kp_q24 >> 16) & 0xFF, (position_loop_kp_q24 >> 24) & 0xFF])
 
-        Data field Description Data
-        DATA[0] command byte 0x3D
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] position loop Ki parameters low byte 1 DATA[4] = *(uint8_t *)(&anglePidKi)
-        DATA[5] position loop Ki parameters byte 2 DATA[5] = *((uint8_t *)(&anglePidKi)+1)
-        DATA[6] position loop Ki parameters byte 3 DATA[6] = *((uint8_t *)(&anglePidKi)+2)
-        DATA[7] position loop Ki parameters byte 4 DATA[7] = *((uint8_t *)(&anglePidKi)+3)
+        # Extract confirmation of Position loop Kp parameters from the response
+        position_loop_kp_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
 
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent.
+        # Convert confirmed position_loop_kp from Q24 format to float
+        position_loop_kp_confirmed_float = position_loop_kp_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Position loop Kp set to ", position_loop_kp_confirmed_float)
+
+        return position_loop_kp_confirmed_float
+
+    def write_position_loop_Ki_to_ROM(self, position_loop_ki, debug=None):
         """
+        Writes the Ki parameters of the position loop to the ROM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x3D)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Position loop Ki parameters (Q24 format)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - position_loop_ki: Position loop Ki parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - position_loop_ki_confirmed: Position loop Ki parameters (float) as confirmed by the drive.
+        """
+        # Convert position_loop_ki from float to Q24 format
+        position_loop_ki_q24 = int(position_loop_ki * 16777216)
+
+        # Send command to write the Ki parameters of the position loop to the ROM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_POSITION_LOOP_KI_TO_ROM, 0x00, 0x00, 0x00, (position_loop_ki >> 0) & 0xFF,(position_loop_ki >> 8) & 0xFF,(position_loop_ki >> 16) & 0xFF,(position_loop_ki >> 24) & 0xFF])
-        position_loop_ki = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Position loop Ki set to ", position_loop_ki)
-        return position_loop_ki
-    
-    def write_speed_loop_Kp_to_ROM(self,speed_loop_kp,debug=None):
-        """
-        The host sends the command to write the Kp parameters of speed loop to the ROM, and the write parameters are valid after the power off,and the Q format (Q24) is used for conversion. 
-        eg, kp=0.25,speed loop after conversion kp,speedPidKp=0.25*16777216=4194304;
+                                    data=[self.ADDR_WRITE_POSITION_LOOP_KI_TO_ROM, 0x00, 0x00, 0x00, 
+                                            (position_loop_ki_q24 >> 0) & 0xFF, (position_loop_ki_q24 >> 8) & 0xFF, 
+                                            (position_loop_ki_q24 >> 16) & 0xFF, (position_loop_ki_q24 >> 24) & 0xFF])
 
-        Data field Description Data
-        DATA[0] command byte 0x3E
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] speed loop Kp parameters low byte 1 DATA[4] = *(uint8_t *)(&speedPidKp)
-        DATA[5] speed loop Kp parameters byte 2 DATA[5] = *((uint8_t *)(&speedPidKp)+1)
-        DATA[6] speed loop Kp parameters byte 3 DATA[6] = *((uint8_t *)(&speedPidKp)+2)
-        DATA[7] speed loop Kp parameters byte 4 DATA[7] = *((uint8_t *)(&speedPidKp)+3)
-        
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent.
+        # Extract confirmation of Position loop Ki parameters from the response
+        position_loop_ki_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+
+        # Convert confirmed position_loop_ki from Q24 format to float
+        position_loop_ki_confirmed_float = position_loop_ki_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Position loop Ki set to ", position_loop_ki_confirmed_float)
+
+        return position_loop_ki_confirmed_float
+
+    def write_speed_loop_Kp_to_ROM(self, speed_loop_kp, debug=None):
         """
+        Writes the Kp parameters of the speed loop to the ROM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x3E)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Speed loop Kp parameters (Q24 format)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - speed_loop_kp: Speed loop Kp parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - speed_loop_kp_confirmed: Speed loop Kp parameters (float) as confirmed by the drive.
+        """
+        # Convert speed_loop_kp from float to Q24 format
+        speed_loop_kp_q24 = int(speed_loop_kp * 16777216)
+
+        # Send command to write the Kp parameters of the speed loop to the ROM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_SPEED_LOOP_KP_TO_ROM, 0x00, 0x00, 0x00, (speed_loop_kp >> 0) & 0xFF,(speed_loop_kp >> 8) & 0xFF,(speed_loop_kp >> 16) & 0xFF,(speed_loop_kp >> 24) & 0xFF])
-        speed_loop_kp = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Speed loop Kp set to ", speed_loop_kp)
-        return speed_loop_kp
-    
-    def write_speed_loop_Ki_to_ROM(self,speed_loop_ki,debug=None):
-        """
-        The host sends the command to write the Ki parameters of speed loop to the ROM, and the write parameters are valid after the power off,and the Q format (Q24) is used for conversion. 
-        eg, ki=0.25,speed loop after conversion Ki,speedPidKi=0.25*16777216=4194304;
+                                    data=[self.ADDR_WRITE_SPEED_LOOP_KP_TO_ROM, 0x00, 0x00, 0x00, 
+                                            (speed_loop_kp_q24 >> 0) & 0xFF, (speed_loop_kp_q24 >> 8) & 0xFF, 
+                                            (speed_loop_kp_q24 >> 16) & 0xFF, (speed_loop_kp_q24 >> 24) & 0xFF])
 
-        Data field Description Data
-        DATA[0] command byte 0x3F
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] speed loop Ki parameters low byte 1 DATA[4] = *(uint8_t *)(&speedPidKi)
-        DATA[5] speed loop Ki parameters byte 2 DATA[5] = *((uint8_t *)(&speedPidKi)+1)
-        DATA[6] speed loop Ki parameters byte 3 DATA[6] = *((uint8_t *)(&speedPidKi)+2)
-        DATA[7] speed loop Ki parameters byte 4 DATA[7] = *((uint8_t *)(&speedPidKi)+3)
+        # Extract confirmation of Speed loop Kp parameters from the response
+        speed_loop_kp_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
 
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent.
+        # Convert confirmed speed_loop_kp from Q24 format to float
+        speed_loop_kp_confirmed_float = speed_loop_kp_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Speed loop Kp set to ", speed_loop_kp_confirmed_float)
+
+        return speed_loop_kp_confirmed_float
+
+    def write_speed_loop_Ki_to_ROM(self, speed_loop_ki, debug=None):
         """
+        Writes the Ki parameters of the speed loop to the ROM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x3F)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Speed loop Ki parameters (Q24 format)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - speed_loop_ki: Speed loop Ki parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - speed_loop_ki_confirmed: Speed loop Ki parameters (float) as confirmed by the drive.
+        """
+        # Convert speed_loop_ki from float to Q24 format
+        speed_loop_ki_q24 = int(speed_loop_ki * 16777216)
+
+        # Send command to write the Ki parameters of the speed loop to the ROM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_SPEED_LOOP_KI_TO_ROM, 0x00, 0x00, 0x00, (speed_loop_ki >> 0) & 0xFF,(speed_loop_ki >> 8) & 0xFF,(speed_loop_ki >> 16) & 0xFF,(speed_loop_ki >> 24) & 0xFF])
-        speed_loop_ki = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Speed loop Ki set to ", speed_loop_ki)
-        return speed_loop_ki
-    
-    def write_current_loop_Kp_to_ROM(self,current_loop_kp,debug=None):
-        """
-        The host sends the command to write the Kp parameters of current loop to the ROM, and the write parameters are valid after the power off,and the Q format (Q24) is used for conversion. 
-        eg, kp=0.25,current loop after conversion kp,torquePidKp=0.25*16777216=4194304;
+                                    data=[self.ADDR_WRITE_SPEED_LOOP_KI_TO_ROM, 0x00, 0x00, 0x00, 
+                                            (speed_loop_ki_q24 >> 0) & 0xFF, (speed_loop_ki_q24 >> 8) & 0xFF, 
+                                            (speed_loop_ki_q24 >> 16) & 0xFF, (speed_loop_ki_q24 >> 24) & 0xFF])
 
-        Data field Description Data
-        DATA[0] NULL 0x40
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] current loop Kp parameters low byte 1 DATA[4] = *(uint8_t *)(&torquePidKp)
-        DATA[5] current loop Kp parameters byte 2 DATA[5] = *((uint8_t *)(&torquePidKp)+1)
-        DATA[6] current loop Kp parameters byte 3 DATA[6] = *((uint8_t *)(&torquePidKp)+2)
-        DATA[7] current loop Kp parameters byte 4 DATA[7] = *((uint8_t *)(&torquePidKp)+3)
-        
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent.
+        # Extract confirmation of Speed loop Ki parameters from the response
+        speed_loop_ki_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+
+        # Convert confirmed speed_loop_ki from Q24 format to float
+        speed_loop_ki_confirmed_float = speed_loop_ki_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Speed loop Ki set to ", speed_loop_ki_confirmed_float)
+
+        return speed_loop_ki_confirmed_float
+
+    def write_current_loop_Kp_to_ROM(self, current_loop_kp, debug=None):
         """
+        Writes the Kp parameters of the current loop to the ROM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x40)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Current loop Kp parameters (Q24 format)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - current_loop_kp: Current loop Kp parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - current_loop_kp_confirmed: Current loop Kp parameters (float) as confirmed by the drive.
+        """
+        # Convert current_loop_kp from float to Q24 format
+        current_loop_kp_q24 = int(current_loop_kp * 16777216)
+
+        # Send command to write the Kp parameters of the current loop to the ROM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_CURRENT_LOOP_KP_TO_ROM, 0x00, 0x00, 0x00, (current_loop_kp >> 0) & 0xFF,(current_loop_kp >> 8) & 0xFF,(current_loop_kp >> 16) & 0xFF,(current_loop_kp >> 24) & 0xFF])
-        current_loop_kp = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Current loop Kp set to ", current_loop_kp)
-        return current_loop_kp
-    
-    def write_current_loop_Ki_to_ROM(self,current_loop_ki,debug=None):
-        """
-        The host sends the command to write the Ki parameters of current loop to the ROM, and the write parameters are valid after the power is turned off,and the Q format (Q24) is used for conversion. 
-        eg, ki=0.25,current loop after conversion Ki ,torquePidKi=0.25*16777216=4194304;
+                                    data=[self.ADDR_WRITE_CURRENT_LOOP_KP_TO_ROM, 0x00, 0x00, 0x00, 
+                                            (current_loop_kp_q24 >> 0) & 0xFF, (current_loop_kp_q24 >> 8) & 0xFF, 
+                                            (current_loop_kp_q24 >> 16) & 0xFF, (current_loop_kp_q24 >> 24) & 0xFF])
 
-        Data field Description Data
-        DATA[0] command byte 0x41
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] current loop Ki parameters low byte 1 DATA[4] = *(uint8_t *)(&torquePidKi)
-        DATA[5] current loop Ki parameters byte 2 DATA[5] = *((uint8_t *)(&torquePidKi)+1)
-        DATA[6] current loop Ki parameters byte 3 DATA[6] = *((uint8_t *)(&torquePidKi)+2)
-        DATA[7] current loop Ki parameters byte 4 DATA[7] = *((uint8_t *)(&torquePidKi)+3)
+        # Extract confirmation of Current loop Kp parameters from the response
+        current_loop_kp_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
 
-        Drive reply(one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent
+        # Convert confirmed current_loop_kp from Q24 format to float
+        current_loop_kp_confirmed_float = current_loop_kp_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Current loop Kp set to ", current_loop_kp_confirmed_float)
+
+        return current_loop_kp_confirmed_float
+
+    def write_current_loop_Ki_to_ROM(self, current_loop_ki, debug=None):
         """
+        Writes the Ki parameters of the current loop to the ROM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x41)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Current loop Ki parameters (Q24 format)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - current_loop_ki: Current loop Ki parameters (float).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - current_loop_ki_confirmed: Current loop Ki parameters (float) as confirmed by the drive.
+        """
+        # Convert current_loop_ki from float to Q24 format
+        current_loop_ki_q24 = int(current_loop_ki * 16777216)
+
+        # Send command to write the Ki parameters of the current loop to the ROM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_CURRENT_LOOP_KI_TO_ROM, 0x00, 0x00, 0x00, (current_loop_ki >> 0) & 0xFF,(current_loop_ki >> 8) & 0xFF,(current_loop_ki >> 16) & 0xFF,(current_loop_ki >> 24) & 0xFF])
-        current_loop_ki = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("Current loop Ki set to ", current_loop_ki)
-        return current_loop_ki
-	
+                                    data=[self.ADDR_WRITE_CURRENT_LOOP_KI_TO_ROM, 0x00, 0x00, 0x00, 
+                                            (current_loop_ki_q24 >> 0) & 0xFF, (current_loop_ki_q24 >> 8) & 0xFF, 
+                                            (current_loop_ki_q24 >> 16) & 0xFF, (current_loop_ki_q24 >> 24) & 0xFF])
 
-    def read_acceleration(self,debug=None):
+        # Extract confirmation of Current loop Ki parameters from the response
+        current_loop_ki_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+
+        # Convert confirmed current_loop_ki from Q24 format to float
+        current_loop_ki_confirmed_float = current_loop_ki_confirmed / 16777216.0
+
+        # Print debug information if enabled
+        if debug:
+            print("Current loop Ki set to ", current_loop_ki_confirmed_float)
+
+        return current_loop_ki_confirmed_float
+
+
+    def read_acceleration(self, debug=None):
         """
-        The host send the command to read motor acceleration data
+        Reads motor acceleration data from the drive.
 
-        Data field Description Data
-        DATA[0] command byte 0x42
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Command Structure:
+        - DATA[0]: Command byte (0x42)
+        - DATA[1-7]: NULL bytes
 
-        Drive reply (one frame)
-        The driver reply data include acceleration data, data type :int32_t, unit:1dps/s,Parameter range0-10000. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x42
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] Acceleration low byte 1 DATA[4] = *(uint8_t *)(&Accel)
-        DATA[5] Acceleration byte 2 DATA[5] = *((uint8_t *)(&Accel)+1)
-        DATA[6] Acceleration byte 3 DATA[6] = *((uint8_t *)(&Accel)+2)
-        DATA[7] Acceleration byte 4 DATA[7] = *((uint8_t *)(&Accel)+3)
+        Response Structure:
+        - DATA[0]: Command byte (0x42)
+        - DATA[1-4]: Acceleration data (int32_t, range 0-10000, in dps/s)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - acceleration: Motor acceleration data in dps/s.
         """
+        # Send command to read motor acceleration data
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_ACCELERATION, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        acceleration = (msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24))
-        if debug != None: print(f"Acceleration (range 0-10000) : {acceleration} dps/s")
-        return acceleration
-	
-    def write_acceleration_to_RAM(self, acceleration,debug=None):
-        """
-        The host sends the command to write the acceleration to the RAM, and the write parameters are invalid after the power is turned off. 
-        Acceleration data Accel is int32_t type, unit 1dps/s,Parameter range0-10000. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x43
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] Acceleration low byte 1 DATA[4] = *(uint8_t *)(&Accel)
-        DATA[5] Acceleration byte 2 DATA[5] = *((uint8_t *)(&Accel)+1)
-        DATA[6] Acceleration byte 3 DATA[6] = *((uint8_t *)(&Accel)+2)
-        DATA[7] Acceleration byte 4 DATA[7] = *((uint8_t *)(&Accel)+3)
+                                    data=[self.ADDR_READ_ACCELERATION, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent.
-        """
-        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_ACCELERATION_TO_RAM, 0x00, 0x00, 0x00, (acceleration >> 0) & 0xFF,(acceleration >> 8) & 0xFF,(acceleration >> 16) & 0xFF,(acceleration >> 24) & 0xFF])
+        # Extract acceleration data from the response
         acceleration = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
-        if debug != None: print("RX : Acceleration set to ", acceleration)
-        return acceleration
-    
-    def read_multiturn_encoder_position(self,debug=None):
-        """
-        The host sends this command to read the encoder multi-turn position. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x60
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command. 
-        The frame data contains the following parameters. 
-        Encoder multiturn position (int64_t type, multiturn encoder value range ,valid data is 6 bytes),whichistheencoder original position minus the encoder multiturn zero offset value,the seventh byte representspositive and negative, 0 is positive, and 1 is negative.
-        
-        Data field Description Data
-        DATA[0] command byte 0x60
-        DATA[1] Encoder position low byte1 DATA[0] = *(uint8_t *)(&encoder)
-        DATA[2] Encoder position byte2 DATA[1] = *((uint8_t *)(&encoder)+1)
-        DATA[3] Encoder position byte3 DATA[2] = *((uint8_t *)(&encoder)+2)
-        DATA[4] Encoder position byte4 DATA[3] = *((uint8_t *)(&encoder)+3)
-        DATA[5] Encoder position byte5 DATA[4] = *((uint8_t *)(&encoder)+4)
-        DATA[6] Encoder position byte6 DATA[5] = *((uint8_t *)(&encoder)+5)
-        DATA[7] Encoder position positive or negative flag bit 1 minus , 0 plus
+        # Print debug information if enabled
+        if debug:
+            print(f"Acceleration: {acceleration} dps/s")
+
+        return acceleration
+
+    def write_acceleration_to_RAM(self, acceleration, debug=None):
         """
+        Writes acceleration data to the RAM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x43)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Acceleration data (int32_t, range 0-10000, in dps/s)
+
+        Response Structure:
+        - DATA[0-7]: Same as the received command
+
+        Parameters:
+        - acceleration: Acceleration data to write (int32_t, range 0-10000, in dps/s).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - acceleration: Acceleration data as confirmed by the drive.
+        """
+        # Send command to write acceleration data to the RAM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_MULTITURN_ENCODER_POSITION, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                                    data=[self.ADDR_WRITE_ACCELERATION_TO_RAM, 0x00, 0x00, 0x00, 
+                                            (acceleration >> 0) & 0xFF, (acceleration >> 8) & 0xFF, 
+                                            (acceleration >> 16) & 0xFF, (acceleration >> 24) & 0xFF])
+
+        # Extract confirmation of acceleration data from the response
+        acceleration_confirmed = msg.data[4] | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+
+        # Print debug information if enabled
+        if debug:
+            print("Acceleration set to ", acceleration_confirmed)
+
+        return acceleration_confirmed
+
+
+    def read_multiturn_encoder_position(self, debug=None):
+        """
+        Reads the encoder multi-turn position from the drive.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x60)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x60)
+        - DATA[1-6]: Encoder position (int64_t, multiturn encoder value range)
+        - DATA[7]: Encoder position positive or negative flag bit (1 for negative, 0 for positive)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - encoder_position: Encoder multi-turn position.
+        """
+        # Send command to read encoder multi-turn position
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
+                                    data=[self.ADDR_READ_MULTITURN_ENCODER_POSITION, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract encoder position data from the response
         encoder_position = msg.data[1] | (msg.data[2] << 8) | (msg.data[3] << 16) | (msg.data[4] << 24) | (msg.data[5] << 32) | (msg.data[6] << 40)
-        if msg.data[7] != 0: encoder_position = -encoder_position
-        if debug is not None: print(f"Multiturn encoder position: {encoder_position}")
+
+        # Check if encoder position is negative
+        if msg.data[7] != 0:
+            encoder_position = -encoder_position
+
+        # Print debug information if enabled
+        if debug is not None:
+            print(f"Multiturn encoder position: {encoder_position}")
+
         return encoder_position
 
-    def read_multiturn_encoder_original_position(self,debug=None):
+    def read_multiturn_encoder_original_position(self, debug=None):
         """
-        The host sends this command to read the encoder multi-turn position. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x61
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Reads the encoder multi-turn original position from the drive.
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command. 
-        The frame data contains the following parameters. 
-        Encoder multiturn original position encoderRaw(int64_t type, value range ,valid data is 6 bytes),theseventh byte represents positive and negative, 0 is positive, and 1 is negative. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x61
-        DATA[1] Encoder original position byte1 DATA[0] = *(uint8_t *)(&encoderRaw)
-        DATA[2] Encoder original position byte2 DATA[1] = *((uint8_t *)(&encoderRaw)+1)
-        DATA[3] Encoder original position byte3 DATA[2] = *((uint8_t *)(&encoderRaw)+2)
-        DATA[4] Encoder original position byte4 DATA[3] = *((uint8_t *)(&encoderRaw)+3)
-        DATA[5] Encoder original position byte5 DATA[4] = *((uint8_t *)(&encoderRaw)+4)
-        DATA[6] Encoder original position byte6 DATA[5] = *((uint8_t *)(&encoderRaw)+5)
-        DATA[7] Encoder original position positive or negative flag bit 1 negative, 0 positive
+        Command Structure:
+        - DATA[0]: Command byte (0x61)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x61)
+        - DATA[1-6]: Encoder original position (int64_t, value range)
+        - DATA[7]: Encoder original position positive or negative flag bit (1 for negative, 0 for positive)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - encoder_raw: Encoder multi-turn original position.
         """
+        # Send command to read encoder multi-turn original position
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_MULTITURN_ENCODER_ORIGINAL_POSITION, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                                    data=[self.ADDR_READ_MULTITURN_ENCODER_ORIGINAL_POSITION, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract encoder original position data from the response
         encoder_raw = msg.data[1] | (msg.data[2] << 8) | (msg.data[3] << 16) | (msg.data[4] << 24) | (msg.data[5] << 32) | (msg.data[6] << 40)
-        if msg.data[7] != 0: encoder_raw = -encoder_raw
-        if debug is not None: print(f"Multiturn encoder original position : {encoder_raw}")
+
+        # Check if encoder original position is negative
+        if msg.data[7] != 0:
+            encoder_raw = -encoder_raw
+
+        # Print debug information if enabled
+        if debug is not None:
+            print(f"Multiturn encoder original position : {encoder_raw}")
+
         return encoder_raw
-    
-    def read_multiturn_encoder_zero_offset(self,debug=None):
-        """
-        The host sends this command to read the encoder multi-turn zero offset value. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x62
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command. The frame data contains the followingparameters. encoder multi-turn zero offset encoderOffset（int64_t type,value range,valid data is 6 bytes）,theseventhbyte represents positive and negative, 0 is positive, and 1 is negative. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x62
-        DATA[1] Encoder offset byte1 DATA[0] = *(uint8_t *)(&encoderOffset)
-        DATA[2] Encoder offset byte2 DATA[1] = *((uint8_t *)(&encoderOffset)+1)
-        DATA[3] Encoder offset byte3 DATA[2] = *((uint8_t *)(&encoderOffset)+2)
-        DATA[4] Encoder offset byte4 DATA[3] = *((uint8_t *)(&encoderOffset)+3)
-        DATA[5] Encoder offset byte5 DATA[4] = *((uint8_t *)(&encoderOffset)+4)
-        DATA[6] Encoder offset byte6 DATA[5] = *((uint8_t *)(&encoderOffset)+5)
-        DATA[7] Encoder offset positive or negative flag bit 1 negative , 0 positive
+    def read_multiturn_encoder_zero_offset(self, debug=None):
         """
+        Reads the encoder multi-turn zero offset value from the drive.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x62)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x62)
+        - DATA[1-6]: Encoder zero offset (int64_t, value range)
+        - DATA[7]: Encoder zero offset positive or negative flag bit (1 for negative, 0 for positive)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - encoder_zero_offset: Encoder multi-turn zero offset value.
+        """
+        # Send command to read encoder multi-turn zero offset value
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_MULTITURN_ENCODER_OFFSET, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                                    data=[self.ADDR_READ_MULTITURN_ENCODER_OFFSET, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract encoder zero offset value from the response
         encoder_zero_offset = msg.data[1] | (msg.data[2] << 8) | (msg.data[3] << 16) | (msg.data[4] << 24) | (msg.data[5] << 32) | (msg.data[6] << 40)
-        if msg.data[7] != 0 : encoder_zero_offset = -encoder_zero_offset
-        if debug != None: print(f"Multiturn encoder zero offset : {encoder_zero_offset}")
-        return encoder_zero_offset
-    
-    def write_multiturn_encoder_value_position_to_ROM_as_motor_zero(self,debug=None):
-        """
-        The host sends this command to set the encoder zero offset, where the encoder multi-turn valueencoder Offset that needs to be written is int64_t type,(value range,valid data is 6 bytes)，theseventhbyte represents positive and negative, 0 is positive, and 1 is negative. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x63
-        DATA[1] Encoder offset low byte1 DATA[0] = *(uint8_t *)(&encoderOffset)
-        DATA[2] Encoder offset byte2 DATA[1] = *((uint8_t *)(&encoderOffset)+1)
-        DATA[3] Encoder offset byte3 DATA[2] = *((uint8_t *)(&encoderOffset)+2)
-        DATA[4] Encoder offset byte4 DATA[3] = *((uint8_t *)(&encoderOffset)+3)
-        DATA[5] Encoder offset byte5 DATA[4] = *((uint8_t *)(&encoderOffset)+4)
-        DATA[6] Encoder offset byte6 DATA[5] = *((uint8_t *)(&encoderOffset)+5)
-        DATA[7] Encoder offset positive or negative flag bit 1 negative , 0 positive
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command. The frame data contains the following parameters
+        # Check if encoder zero offset is negative
+        if msg.data[7] != 0:
+            encoder_zero_offset = -encoder_zero_offset
+
+        # Print debug information if enabled
+        if debug is not None:
+            print(f"Multiturn encoder zero offset : {encoder_zero_offset}")
+
+        return encoder_zero_offset
+
+    
+    def write_multiturn_encoder_value_position_to_ROM_as_motor_zero(self, encoder_offset, debug=None):
         """
+        Writes the encoder zero offset value to ROM as motor zero.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x63)
+        - DATA[1-6]: Encoder offset value (int64_t, value range)
+        - DATA[7]: Encoder offset positive or negative flag bit (1 for negative, 0 for positive)
+
+        Parameters:
+        - encoder_offset: Encoder zero offset value to write.
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - encoder_offset: Encoder zero offset value.
+        """
+        # Determine if the encoder offset is negative
+        is_negative = 1 if encoder_offset < 0 else 0
+
+        # Convert encoder offset to absolute value
+        encoder_offset = abs(encoder_offset)
+
+        # Send command to write encoder zero offset value to ROM as motor zero
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_MULTITURN_ENCODER_VALUES_TO_ROM_AS_MOTOR_ZERO, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                                    data=[
+                                        self.ADDR_WRITE_MULTITURN_ENCODER_VALUES_TO_ROM_AS_MOTOR_ZERO,
+                                        (encoder_offset >> 0) & 0xFF,
+                                        (encoder_offset >> 8) & 0xFF,
+                                        (encoder_offset >> 16) & 0xFF,
+                                        (encoder_offset >> 24) & 0xFF,
+                                        (encoder_offset >> 32) & 0xFF,
+                                        (encoder_offset >> 40) & 0xFF,
+                                        is_negative
+                                    ])
+
+        # Extract encoder offset value from the response
         encoder_offset = msg.data[1] | (msg.data[2] << 8) | (msg.data[3] << 16) | (msg.data[4] << 24) | (msg.data[5] << 32) | (msg.data[6] << 40)
-        if msg.data[7] != 0 : encoder_offset = -encoder_offset
-        if debug != None: print(f"Multiturn encoder offset set to : {encoder_offset}")
+
+        # Check if encoder offset is negative
+        if msg.data[7] != 0:
+            encoder_offset = -encoder_offset
+
+        # Print debug information if enabled
+        if debug is not None:
+            print(f"Multiturn encoder offset set to : {encoder_offset}")
+
         return encoder_offset
 
-    def write_multiturn_encoder_current_position_to_ROM_as_motor_zero(self,debug=None):
+    def write_multiturn_encoder_current_position_to_ROM_as_motor_zero(self, debug=None):
         """
-        Write the current encoder position of the motor as the initial position to the ROM
+        Write the current encoder position of the motor as the initial position to the ROM.
 
         Notice:
-        1.This command needs to be re-powered to take effect
-        2.This command will write the zero position to the ROM of the drive. Multiple writes will affect thelifeofthe chip. Frequent use is not recommended. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x64
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        1. This command needs to be re-powered to take effect.
+        2. This command will write the zero position to the ROM of the drive. Multiple writes will affect the life of the chip. Frequent use is not recommended.
 
-        Drive reply (one frame)
-        The motor reply to the host after receiving the command, and the data of encode roffset is the 0 offset value.
+        Command Structure:
+        - DATA[0]: Command byte (0x64)
+        - DATA[1-7]: NULL bytes
 
-        Data field Description Data
-        DATA[0] command byte 0x64
-        DATA[1] encoder offset low byte1 DATA[0] = *(uint8_t *)(&encoderOffset)
-        DATA[2] encoder offset byte2 DATA[1] = *((uint8_t *)(&encoderOffset)+1)
-        DATA[3] encoder offset byte3 DATA[2] = *((uint8_t *)(&encoderOffset)+2)
-        DATA[4] encoder offset byte4 DATA[3] = *((uint8_t *)(&encoderOffset)+3)
-        DATA[5] encoder offset byte5 DATA[4] = *((uint8_t *)(&encoderOffset)+4)
-        DATA[6] encoder offset byte6 DATA[5] = *((uint8_t *)(&encoderOffset)+5)
-        DATA[7] Encoder offset positive or negative flag bit 1 negative , 0 positive 
+        Drive reply (one frame):
+        The motor replies to the host after receiving the command, and the data of encoder offset is the 0 offset value.
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - encoder_offset: Encoder offset value.
         """
+        # Send command to write current encoder position to ROM as motor zero
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_MULTITURN_ENCODER_CURRENT_POSITION_TO_ROM_AS_MOTOR_ZERO, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        encoder_offset = (msg.data[4] | (msg.data[1] << 8) | (msg.data[2] << 16) | (msg.data[3] << 24) | (msg.data[4] << 32) | (msg.data[5] << 40) | (msg.data[6] << 48))
-        if msg.data[7] != 0 : encoder_offset = -encoder_offset
-        if debug != None: print(f"Multiturn encoder offset set to : {encoder_offset}")
+                                    data=[
+                                        self.ADDR_WRITE_MULTITURN_ENCODER_CURRENT_POSITION_TO_ROM_AS_MOTOR_ZERO,
+                                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+                                    ])
+
+        # Extract encoder offset value from the response
+        encoder_offset = (msg.data[1] | (msg.data[2] << 8) | (msg.data[3] << 16) | 
+                        (msg.data[4] << 24) | (msg.data[5] << 32) | (msg.data[6] << 40) | 
+                        (msg.data[7] << 48))
+
+        # Check if encoder offset is negative
+        if msg.data[7] != 0:
+            encoder_offset = -encoder_offset
+
+        # Print debug information if enabled
+        if debug is not None:
+            print(f"Multiturn encoder offset set to : {encoder_offset}")
+
         return encoder_offset
 
-    def read_singleturn_encoder_data(self,debug=None):
+    def read_singleturn_encoder_data(self, debug=None):
         """
-        The host sends this command to read the current position of the encoder. 
-        Note that thecurrentcommand is used as a single-turn data reading command for direct drive motors. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x90
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
-        
-        Drive reply (one frame)
+        Reads the current position of the single-turn encoder, original position, and encoder offset from the drive.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x90)
+        - DATA[1-7]: NULL bytes
+
+        Drive reply (one frame):
         The motor responds to the host after receiving the command.
-        The frame data contains the following parameters. 
-        1.Encoder position encoder (int16_t type, the value range of 16bit encoder is 0~65535), which is the value of the original position of the encoder minus the zero offset of the encoder.
-        2.Encoder's original position encoderRaw (uint16_t type, the value range of 16bit encoder is 0~65535). 3.Encoder offset encoderOffset (uint16_t type, the value range of 16bit encoder is 0~65535), this point is regarded as the zero point of the motor angle.
-        
-        Data field Description Data
-        DATA[0] command byte 0x90
-        DATA[1] NULL 0x00
-        DATA[2] Encoder position low byte DATA[2] = *(uint8_t *)(&encoder)
-        DATA[3] Encoder position high byte DATA[3] = *((uint8_t *)(&encoder)+1)
-        DATA[4] Encoder original position low byte DATA[4] = *(uint8_t *)(&encoderRaw)
-        DATA[5] Encoder original position high byte DATA[5] = *((uint8_t *)(&encoderRaw)+1)
-        DATA[6] Encoder zero offset low byte DATA[6] = *(uint8_t *)(&encoderOffset)
-        DATA[7] Encoder zero offset high byte DATA[7] = *((uint8_t *)(&encoderOffset)+1)
+        The frame data contains the following parameters:
+        1. Encoder position (int16_t type, value range: 0~65535), which is the value of the original position of the encoder minus the zero offset of the encoder.
+        2. Encoder's original position (uint16_t type, value range: 0~65535).
+        3. Encoder offset (uint16_t type, value range: 0~65535), this point is regarded as the zero point of the motor angle.
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - current_position: Current motor position in degrees.
+        - original_position: Original motor position in degrees.
+        - encoder_offset: Encoder offset in degrees.
         """
+        # Send command to read single-turn encoder data
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_SINGLETURN_ENCODER_DATA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                                    data=[self.ADDR_READ_SINGLETURN_ENCODER_DATA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract data from the response
         current_position = (msg.data[2] | (msg.data[3] << 8)) * (360 / 65535)
         original_position = (msg.data[4] | (msg.data[5] << 8)) * (360 / 65535)
         encoder_offset = (msg.data[6] | (msg.data[7] << 8)) * (360 / 65535)
-        if debug != None:
-            print(f"Motor position: {current_position}")
-            print(f"Motor original position: {original_position}")
-            print(f"Motor offset: {encoder_offset}")
+
+        # Print debug information if enabled
+        if debug is not None:
+            print(f"Motor position: {current_position} degrees")
+            print(f"Motor original position: {original_position} degrees")
+            print(f"Motor offset: {encoder_offset} degrees")
+
         return current_position, original_position, encoder_offset
-    
-    def write_encoder_value_to_ROM_as_motor_zero(self,offset,debug=None):
+
+    def write_encoder_value_to_ROM_as_motor_zero(self, offset, debug=None):
         """
-        The host sends this command to set the encoder zero offset, where the encoder value encoderOffset to be written is uint16_t type, and the value range of the 16bit encoder is 0~65535. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x91
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] Encoder zero offset low byte DATA[6] = *(uint8_t *)(&encoderOffset)
-        DATA[7] Encoder zero offset high byte DATA[7] = *((uint8_t *)(&encoderOffset)+1)
-        
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command, the frame data is the same as the host sent.
+        Sets the encoder zero offset to the specified value and writes it to ROM.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x91)
+        - DATA[1-5]: NULL bytes
+        - DATA[6]: Encoder zero offset low byte
+        - DATA[7]: Encoder zero offset high byte
+
+        Drive reply (one frame):
+        The motor responds to the host after receiving the command, and the frame data is the same as the host sent.
+
+        Parameters:
+        - offset: Encoder offset value to be written (uint16_t type, value range: 0~65535).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - new_encoder_offset: Updated encoder offset value after writing to ROM.
         """
+        # Send command to set the encoder zero offset
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_ENCODER_VALUES_TO_ROM_AS_MOTOR_ZERO, 0x00, 0x00, 0x00, 0x00, 0x00, (offset) & 0xFF, ((offset) & 0xFF00) >> 8])
+                                    data=[self.ADDR_WRITE_ENCODER_VALUES_TO_ROM_AS_MOTOR_ZERO, 0x00, 0x00, 0x00, 0x00, 0x00, offset & 0xFF, (offset >> 8) & 0xFF])
+
+        # Extract the new encoder offset from the response
         new_encoder_offset = (msg.data[6] | (msg.data[7] << 8))
-        if debug != None: print(f"Encoder offset set to {new_encoder_offset}")
+
+        # Print debug information if enabled
+        if debug is not None:
+            print(f"Encoder offset set to {new_encoder_offset}")
+
         return new_encoder_offset
 
-    def write_singleturn_encoder_current_position_to_ROM_as_motor_zero(self,debug=None):
+    def write_singleturn_encoder_current_position_to_ROM_as_motor_zero(self, debug=None):
         """
-        Write the current encoder position of the motor as the initial position to the ROM
-        
+        Writes the current encoder position of the motor as the initial position to the ROM.
+
         Notice:
-        1.This command needs to be re-powered to take effect
-        2.This command will write the zero point to the ROM of the drive. Multiple writes will reduce thelifeof thechip. Frequent use is not recommended.
-        
-        Data field Description Data
-        DATA[0] command byte 0x19
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        1. This command needs to be re-powered to take effect.
+        2. This command will write the zero point to the ROM of the drive. Multiple writes will reduce the life of the chip. Frequent use is not recommended.
 
-        Drive reply (one frame) :
-        The motor responds to the host after receiving the command, the encoderOffset in the data is thezerooffset value
-        
-        Data field Description Data
-        DATA[0] command byte 0x19
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] Encoder zero offset low byte DATA[6] = *(uint8_t *)(&encoderOffset)
-        DATA[7] Encoder zero offset high byte DATA[7] = *((uint8_t *)(&encoderOffset)+1)
+        Command Structure:
+        - DATA[0]: Command byte (0x19)
+        - DATA[1-7]: NULL bytes
+
+        Drive reply (one frame):
+        The motor responds to the host after receiving the command, and the encoderOffset in the data is the zero offset value.
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - encoder_offset: Encoder zero offset value written to ROM.
         """
+        # Send command to write the current encoder position as the initial position to the ROM
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_WRITE_SINGLETURN_ENCODER_CURRENT_POSITION_TO_ROM_AS_MOTOR_ZERO, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                                    data=[self.ADDR_WRITE_SINGLETURN_ENCODER_CURRENT_POSITION_TO_ROM_AS_MOTOR_ZERO, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract the encoder zero offset from the response
         encoder_offset = (msg.data[6] | (msg.data[7] << 8))
-        if debug != None: print(f"Initial position set to {encoder_offset}")
+
+        # Print debug information if enabled
+        if debug is not None:
+            print(f"Initial position set to {encoder_offset}")
+
         return encoder_offset
-    
-    def read_multiturn_encoder_angle(self,debug=None):
-        """
-        The host sends command to read the multi-turn angle of the motor. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x92
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command, the frame data contains the followingparameters. 
-        motor Angle, (int64_t type,value range,valid data is 6 bytes),the seventh byte represent positiveandnegative, 0 is positive and 1 is negative, unit 0.01°/LSB
-
-        Data field Description Data
-        DATA[0] command byte 0x92
-        DATA[1] Angle low byte 1 DATA[1] = *(uint8_t *)(&motorAngle)
-        DATA[2] Angle byte2 DATA[2] = *((uint8_t *)(& motorAngle)+1)
-        DATA[3] Angle byte3 DATA[3] = *((uint8_t *)(& motorAngle)+2)
-        DATA[4] Angle byte4 DATA[4] = *((uint8_t *)(& motorAngle)+3)
-        DATA[5] Angle byte5 DATA[5] = *((uint8_t *)(& motorAngle)+4)
-        DATA[6] Angle byte6 DATA[6] = *((uint8_t *)(& motorAngle)+5)
-        DATA[7] Motor angle positive or negative flag bit 1 negative, 0 positive
+    def read_multiturn_encoder_angle(self, debug=None):
         """
-        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_READ_MULTITURN_ANGLE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        motor_angle = msg.data[1] | (msg.data[2] << 8) | (msg.data[3] << 16) | (msg.data[4] << 24) | (msg.data[5] << 32) | (msg.data[6] << 40) * 0.01
-        if msg.data[7] != 0 : motor_angle = -motor_angle
-        if debug !=None : print(f"Encoder multiturn angle: {motor_angle:.2f}°",end='\r')
+        Reads the multi-turn angle of the motor.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x92)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x92)
+        - DATA[1-6]: Motor Angle (int64_t type, valid data is 6 bytes), the seventh byte represents positive and negative, where 0 is positive and 1 is negative, unit 0.01°/LSB
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - motor_angle: Motor angle in degrees.
+        """
+        # Send command to read the multi-turn angle of the motor
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
+                                    data=[self.ADDR_READ_MULTITURN_ANGLE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract motor angle data from the response
+        motor_angle = (msg.data[1] | (msg.data[2] << 8) | (msg.data[3] << 16) | (msg.data[4] << 24) | (msg.data[5] << 32) | (msg.data[6] << 40)) * 0.01
+
+        # Check if the motor angle is negative and adjust if necessary
+        if msg.data[7] != 0:
+            motor_angle = -motor_angle
+
+        # Print debug information if enabled
+        if debug is not None:
+            print(f"Encoder multiturn angle: {motor_angle:.2f}°", end='\r')
+
         return motor_angle
 
-    def read_singleturn_encoder_angle(self,debug=None):
+    def read_singleturn_encoder_angle(self, debug=None):
         """
-        The host sends command to read the single circle angle of the motor. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x94
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Reads the single circle angle of the motor.
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command, the frame data contains the followingparameters. 
-        The motor single circle angle is int16_t type data. 
-        It starts from the encoder zero point and increasesclockwise. 
-        When the zero point is reached again, the value returns to 0, the unit is 0.01°/LSB, andthevalue range is 0~35999. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x94
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] single angle low byte DATA[6] = *(uint8_t *)(& circleAngle)
-        DATA[7] single angle high byte DATA[7] = *((uint8_t *)(& circleAngle)+1)
+        Command Structure:
+        - DATA[0]: Command byte (0x94)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x94)
+        - DATA[6]: Single angle low byte (uint8_t type)
+        - DATA[7]: Single angle high byte (uint8_t type)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - circle_angle: Single circle angle of the motor in degrees.
         """
-        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_READ_SINGLE_CIRCLE_ANGLE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        # Send command to read the single circle angle of the motor
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
+                                    data=[self.ADDR_READ_SINGLE_CIRCLE_ANGLE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract single circle angle data from the response
         circle_angle = (msg.data[6] | (msg.data[7] << 8)) * 0.01
-        if debug != None: print(f"Encoder singleturn position: {circle_angle:.2f}°",end='\r')
+
+        # Print debug information if enabled
+        if debug is not None:
+            print(f"Encoder singleturn position: {circle_angle:.2f}°", end='\r')
+
         return circle_angle
 
 
-    def read_motor_status_1_error_flag(self,debug=None):
+    def read_motor_status_1_error_flag(self, debug=None):
         """
-        This command reads the current motor temperature, voltage and error status flag. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x9A
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Reads the current motor temperature, voltage, and error status flag.
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command, the frame data contains the followingparameters. 
-        1.Motor temperature (int8_t type, unit 1°C/LSB)
-        2.voltage (uint16_t type, unit 0.1V/LSB)
-        3.Error State (uint16_t type, each bit represents different motor state)
+        Command Structure:
+        - DATA[0]: Command byte (0x9A)
+        - DATA[1-7]: NULL bytes
 
-        Data field Description Data
-        DATA[0] command byte 0x9A
-        DATA[1] Motor temperature DATA[1] = *(uint8_t *)(&temperature)
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] voltage low byte DATA[3] = *(uint8_t *)(&voltage)
-        DATA[5] voltage high byte DATA[4] = *((uint8_t *)(& voltage)+1)
-        DATA[6] Error State low byte 1 DATA[6] =*(uint8_t *)(&errorState)
-        DATA[7] Error State byte 2 DATA[7] = *((uint8_t *)(& errorState)+1)
+        Response Structure:
+        - DATA[0]: Command byte (0x9A)
+        - DATA[1]: Motor temperature (int8_t type, unit 1°C/LSB)
+        - DATA[2]: NULL
+        - DATA[3]: NULL
+        - DATA[4]: Voltage low byte (uint8_t type)
+        - DATA[5]: Voltage high byte (uint8_t type)
+        - DATA[6]: Error State low byte (uint8_t type)
+        - DATA[7]: Error State high byte (uint8_t type)
 
-        Memo:
-        System_errorState value state table 1 is as follows:
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
 
-        System_errorState value Status description
-        0x0000 Hardware over-current
-        0x0002 Motor stalled
-        0x0004 Low voltage
-        0x0008 Over-voltage
-        0x0010 Over-current
-        0x0020 brake opening failed
-        0x0040 Bus current error
-        0x0080 Battery voltage error
-        0x0100 overspeed
-        0x0200 Position loop exceeded error
-        0x0400 VDD error
-        0x0800 DSP internal sensor temperature is overheated0x1000 motor temperature is overheated
-        0x2000 Encoder calibration error
-
-        CAN_errorState value state table 2 is as follows:
-
-        CAN_errorState value Status description
-        0x00F0 PID parameter write ROM protection, non-safe operation
-        0x00F1 Encoder value is written into ROM protection, non-safe operation0x00F2 Three-loop switching operation error, non-safe operation
-        0x00F3 Motor brake is not open
-        0x00F4 Motor write ROM protection, non-safe operation
+        Returns:
+        - motor_temp: Motor temperature in degrees Celsius.
+        - voltage: Voltage in volts.
+        - error_state: Error state flag indicating various motor states.
         """
+        # Send command to read motor status and error flag
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_MOTOR_STATUS_1_ERROR_FLAG, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                                    data=[self.ADDR_READ_MOTOR_STATUS_1_ERROR_FLAG, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract motor temperature, voltage, and error state from the response
         motor_temp = msg.data[1]
         voltage = (msg.data[3] | (msg.data[4] << 8)) * 0.1
         error_state = msg.data[6] | (msg.data[7] << 8)
-        if debug != None:
+
+        # Print debug information if enabled
+        if debug is not None:
             print(f"Motor temperature: {motor_temp}°C")
             print(f"Voltage: {voltage}V")
-            if error_state == 0x00:
-                print("Voltage status: OK")
-                print("Temperature status: OK")
-            else:
-                if error_state & self.LOW_PRESSURE:         print("Voltage status: low voltage protection")
-                if error_state & self.OVERVOLTAGE:          print("Voltage status: overvoltage protection")
-                if error_state & self.OVERCURRENT:          print("Voltage status: overcurrent protection")
-                if error_state & self.POWER_OVERRUN:        print("Voltage status: power overrun")
-                if error_state & self.SPEEDING:             print("Voltage status: speeding")
-                if error_state & self.MOTOR_TEMP_OVER:      print("Temperature status: over temperature protection")
-                if error_state & self.ENCODER_CALIB_ERROR:  print("Error status: encoder calibration error")
-        return motor_temp,voltage,error_state
+            print("Error States:")
+            if error_state & 0x0001: print("  - Hardware over-current")
+            if error_state & 0x0002: print("  - Motor stalled")
+            if error_state & 0x0004: print("  - Low voltage")
+            if error_state & 0x0008: print("  - Over-voltage")
+            if error_state & 0x0010: print("  - Over-current")
+            if error_state & 0x0020: print("  - Brake opening failed")
+            if error_state & 0x0040: print("  - Bus current error")
+            if error_state & 0x0080: print("  - Battery voltage error")
+            if error_state & 0x0100: print("  - Overspeed")
+            if error_state & 0x0200: print("  - Position loop exceeded error")
+            if error_state & 0x0400: print("  - VDD error")
+            if error_state & 0x0800: print("  - DSP internal sensor temperature is overheated")
+            if error_state & 0x1000: print("  - Motor temperature is overheated")
+            if error_state & 0x2000: print("  - Encoder calibration error")
+            if error_state & 0x00F0: print("  - PID parameter write ROM protection, non-safe operation")
+            if error_state & 0x00F1: print("  - Encoder value is written into ROM protection, non-safe operation")
+            if error_state & 0x00F2: print("  - Three-loop switching operation error, non-safe operation")
+            if error_state & 0x00F3: print("  - Motor brake is not open")
+            if error_state & 0x00F4: print("  - Motor write ROM protection, non-safe operation")
 
-    def read_motor_status_2(self,debug=None):
-        """
-        This command reads the current temperature, voltage, speed and encoder position of the motor. 
-        
-        Data field Description Data
-        DATA[0] command byte 0x9C
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        return motor_temp, voltage, error_state
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command, the frame data contains the following parameters. 
-        1.Motor temperature (int8_t type, 1℃/LSB)
-        2.Motor torque current Iq (int16_t type, Range:-2048~2048,real torque current range:-33A~33A)
-        3.Motor speed (int16_t type, 1dps/LSB)
-        4.Encoder position value (uint16_t type, 16bit encoder value range:0~65535)
-        
-        Data field Description Data
-        DATA[0] Command byte 0x9C
-        DATA[1] Motor temperature DATA[1] = *(uint8_t *)(&temperature)
-        DATA[2] Torque current low byte DATA[2] = *(uint8_t *)(&iq)
-        DATA[3] Torque current high byte DATA[3] = *((uint8_t *)(&iq)+1)
-        DATA[4] Speed low byte DATA[4] = *(uint8_t *)(&speed)
-        DATA[5] Speed high byte DATA[5] = *((uint8_t *)(&speed)+1)
-        DATA[6] Encoder position low byte DATA[6] = *(uint8_t *)(&encoder)
-        DATA[7] Encoder position high byte DATA[7] = *((uint8_t *)(&encoder)+1)
+    def read_motor_status_2(self, debug=None):
         """
+        Reads the current temperature, voltage, speed, and encoder position of the motor.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x9C)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x9C)
+        - DATA[1]: Motor temperature (int8_t type, 1℃/LSB)
+        - DATA[2]: Torque current low byte (int8_t type)
+        - DATA[3]: Torque current high byte (int8_t type)
+        - DATA[4]: Speed low byte (int8_t type)
+        - DATA[5]: Speed high byte (int8_t type)
+        - DATA[6]: Encoder position low byte (int8_t type)
+        - DATA[7]: Encoder position high byte (int8_t type)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - motor_temp: Motor temperature in degrees Celsius.
+        - torque_current: Torque current in amperes.
+        - motor_speed: Motor speed in degrees per second.
+        - encoder_position: Encoder position value.
+        """
+        # Send command to read motor status and parameters
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_MOTOR_STATUS_2, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                                    data=[self.ADDR_READ_MOTOR_STATUS_2, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract motor parameters from the response
         motor_temp = msg.data[1]
         torque_current = (msg.data[2] | (msg.data[3] << 8))
         motor_speed = (msg.data[4] | (msg.data[5] << 8))
         encoder_position = (msg.data[6] | (msg.data[7] << 8))
-        if debug!=None :
+
+        # Print debug information if enabled
+        if debug is not None:
             print(f"Motor temperature: {motor_temp}°C")
             print(f"Torque current: {torque_current}A")
             print(f"Motor speed: {motor_speed}dps")
             print(f"Encoder position: {encoder_position}")
+
         return motor_temp, torque_current, motor_speed, encoder_position
 
-    def read_motor_status_3(self,debug=None):
+    def read_motor_status_3(self, debug=None):
         """
-        This command reads the current temperature and phase current data of the motor. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0x9D
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Reads the current temperature and phase current data of the motor.
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command, the frame data contains the following parameters:
-        1.Motor temperature (int8_t type, 1℃/LSB)
-        2.A phase current data,the data type is int16_t type, corresponding to the actual phase current is1A/64LSB. 
-        3.B phase current data,the data type is int16_t type,corresponding to the actual phase current is1A/64LSB.
-        4.C phase current data,the data type is int16_t type,corresponding to the actual phase current is1A/64LSB. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0x9D
-        DATA[1] Motor temperature DATA[1] = *(uint8_t *)(&temperature)
-        DATA[2] Phase A current low byte DATA[2] = *(uint8_t *)(&iA)
-        DATA[3] Phase A current high byte DATA[3] = *((uint8_t *)(& iA)+1)
-        DATA[4] Phase B current low byte DATA[4] = *(uint8_t *)(&iB)
-        DATA[5] Phase B current high byte DATA[5] = *((uint8_t *)(& iB)+1)
-        DATA[6] Phase C current low byte DATA[6] = *(uint8_t *)(&iC)
-        DATA[7] Phase C current high byte DATA[7] = *((uint8_t *)(& iC)+1)
+        Command Structure:
+        - DATA[0]: Command byte (0x9D)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x9D)
+        - DATA[1]: Motor temperature (int8_t type, 1℃/LSB)
+        - DATA[2]: Phase A current low byte (int8_t type)
+        - DATA[3]: Phase A current high byte (int8_t type)
+        - DATA[4]: Phase B current low byte (int8_t type)
+        - DATA[5]: Phase B current high byte (int8_t type)
+        - DATA[6]: Phase C current low byte (int8_t type)
+        - DATA[7]: Phase C current high byte (int8_t type)
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - motor_temp: Motor temperature in degrees Celsius.
+        - phase_A_current: Phase A current in amperes.
+        - phase_B_current: Phase B current in amperes.
+        - phase_C_current: Phase C current in amperes.
         """
+        # Send command to read motor status and parameters
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
-                                       data=[self.ADDR_READ_MOTOR_STATUS_3, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+                                    data=[self.ADDR_READ_MOTOR_STATUS_3, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract motor parameters from the response
         motor_temp = msg.data[1]
-        phase_A_current = (msg.data[2] | (msg.data[3] << 8)) * 0.01
-        phase_B_current = (msg.data[4] | (msg.data[5] << 8)) * 0.01
-        phase_C_current = (msg.data[6] | (msg.data[7] << 8)) * 0.01
-        if debug!=None :
+        
+        # Calculate phase A current
+        phase_A_current = (msg.data[2] | (msg.data[3] << 8)) * (1 / 64)
+
+        # Calculate phase B current
+        phase_B_current = (msg.data[4] | (msg.data[5] << 8)) * (1 / 64)
+
+        # Calculate phase C current
+        phase_C_current = (msg.data[6] | (msg.data[7] << 8)) * (1 / 64)
+
+        # Print debug information if enabled
+        if debug != None:
             print(f"Motor temperature: {motor_temp}°C")
             print(f"Phase A current: {phase_A_current}A")
             print(f"Phase B current: {phase_B_current}A")
             print(f"Phase C current: {phase_C_current}A")
+
         return motor_temp, phase_A_current, phase_B_current, phase_C_current
 
 
-    def motor_off(self,debug=None): 
+    def motor_off(self, debug=None): 
         """
-        Turn off the motor, and clear the running state of the motor and the previously received control
-        commands at the same time. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0x80
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Turn off the motor, and clear the running state of the motor and the previously received control commands at the same time. 
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command,the frame data is the same as that sent bythe host.
+        Command Structure:
+        - DATA[0]: Command byte (0x80)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - The motor responds to the host after receiving the command, the frame data is the same as that sent by the host.
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - success: 1 if the motor was successfully turned off, 0 otherwise.
         """
+        # Send command to turn off the motor
         msg = self.can_bus.sendMessage(self.BASE_ADDR_ID + self.id, [self.ADDR_MOTOR_OFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        if msg.can_id == self.BASE_ADDR_ID + self.id and msg.data[0]==self.ADDR_MOTOR_OFF and msg.data[1]==0x00 and msg.data[2]==0x00 and msg.data[3]==0x00 and msg.data[4]==0x00 and msg.data[5]==0x00 and msg.data[6]==0x00 and msg.data[7]==0x00 : return 1
-        else : return 0
-
-    def stop(self,debug=None):
-        """
-        Stop the motor, but do not clear the running state of the motor and the previously received control
-        commands. 
         
-        Data field Description Data
-        DATA[0] Command byte 0x81
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        # Check if the response matches the sent command
+        success = 1 if msg.can_id == self.BASE_ADDR_ID + self.id and all(data == 0x00 for data in msg.data[1:]) else 0
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command,the frame data is the same as that sent bythe host.
+        return success
+
+    def stop(self, debug=None):
         """
+        Stop the motor, but do not clear the running state of the motor and the previously received control commands. 
+
+        Command Structure:
+        - DATA[0]: Command byte (0x81)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - The motor responds to the host after receiving the command, the frame data is the same as that sent by the host.
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - success: 1 if the motor was successfully stopped, 0 otherwise.
+        """
+        # Send command to stop the motor
         msg = self.can_bus.sendMessage(self.BASE_ADDR_ID + self.id, [self.ADDR_STOP, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        if msg.can_id == self.BASE_ADDR_ID + self.id and msg.data[0]==self.ADDR_STOP and msg.data[1]==0x00 and msg.data[2]==0x00 and msg.data[3]==0x00 and msg.data[4]==0x00 and msg.data[5]==0x00 and msg.data[6]==0x00 and msg.data[7]==0x00 : return 1
-        else : return 0
-
-    def running(self,debug=None):
-        """
-        Resume motor operation from the motor stop command (recover the control mode before thestop). 
         
-        Data field Description Data
-        DATA[0] Command byte 0x88
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        # Check if the response matches the sent command
+        success = 1 if msg.can_id == self.BASE_ADDR_ID + self.id and all(data == 0x00 for data in msg.data[1:]) else 0
 
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command,the frame data is the same as that sent by the host.
+        return success
+
+    def running(self, debug=None):
         """
+        Resume motor operation from the motor stop command (recover the control mode before the stop). 
+
+        Command Structure:
+        - DATA[0]: Command byte (0x88)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - The motor responds to the host after receiving the command, the frame data is the same as that sent by the host.
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - success: 1 if the motor resumed operation successfully, 0 otherwise.
+        """
+        # Send command to resume motor operation
         msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_RUNNING, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        if msg.can_id == self.BASE_ADDR_ID + self.id and msg.data[0]==self.ADDR_RUNNING and msg.data[1]==0x00 and msg.data[2]==0x00 and msg.data[3]==0x00 and msg.data[4]==0x00 and msg.data[5]==0x00 and msg.data[6]==0x00 and msg.data[7]==0x00 : return 1
-        else : return 0
+        
+        # Check if the response matches the sent command
+        success = 1 if msg.can_id == self.BASE_ADDR_ID + self.id and all(data == 0x00 for data in msg.data[1:]) else 0
+
+        return success
 
 
-    def torque_closed_loop_control(self, torque,debug=None):
+    def torque_closed_loop_control(self, torque, debug=None):
         """
-        The host sends this command to control the torque current output of the motor. 
-        The control valueiqControl is type of int16_t, and the value range is -2000~2000, corresponding to the actual torquecurrent range -32A~32A (the bus current and the actual torque of the motor vary with different motors. ). 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA1
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] Low byte of torque current control value DATA[4] = *(uint8_t *)(&iqControl)
-        DATA[5] high byte of torque current control value DATA[5] = *((uint8_t *)(&iqControl)+1)
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Control the torque current output of the motor.
 
-        Memo:
-        The control value iqControl in this command is not limited by the Max Torque Current value in the host
-        computer of debugging software. 
-        
-        Drive reply (one frame)
-        The motor responds to the host after receiving the command, the frame data contains the followingparameters：
-        1.Motor temperature(int8_t type, 1℃/LSB). 
-        2.Motor torque current Iq (int16_t type, Range-2048~2048, corresponding to the actual torque current range -33A~33A). 
-        3.Motor speed (int16_t type,1dps/LSB)
-        4.Encoder position value (uint16_t type, the value range of 16bit encoder is 0~65535). 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA1
-        DATA[1] Motor temperature DATA[1] = *(uint8_t *)(&temperature)
-        DATA[2] Torque current low byte DATA[2] = *(uint8_t *)(&iq)
-        DATA[3] Torque current high byte DATA[3] = *((uint8_t *)(&iq)+1)
-        DATA[4] Motor speed low byte DATA[4] = *(uint8_t *)(&speed)
-        DATA[5] Motor speed high byte DATA[5] = *((uint8_t *)(&speed)+1)
-        DATA[6] Encoder position low byte DATA[6] = *(uint8_t *)(&encoder)
-        DATA[7] Encoder position high byte DATA[7] = *((uint8_t *)(&encoder)+1)
+        Command Structure:
+        - DATA[0]: Command byte (0xA1)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-5]: Torque current control value (int16_t type, Range: -2048~2048, corresponding to the actual torque current range: -33A~33A)
+        - DATA[6-7]: NULL bytes
 
-        Note: During the three-loop switching process, if the motor is not in the safe state, the drive will returnthethree-loop operation error value, 0x00F6, and the motor will switch to the current-loop safe state. 
-        Pleasebe aware that the following three-loop operation instructions are similar. 
-        
-        Non-safe operation error response:
+        Response Structure:
+        - DATA[0]: Command byte (0xA1)
+        - DATA[1]: Motor temperature (int8_t type, 1℃/LSB)
+        - DATA[2-3]: Torque current (int16_t type, Range: -2048~2048, corresponding to the actual torque current range: -33A~33A)
+        - DATA[4-5]: Motor speed (int16_t type, 1dps/LSB)
+        - DATA[6-7]: Encoder position value (uint16_t type, 16-bit encoder value range: 0~65535)
 
-        Data field Description Data
-        DATA[0] Command byte 0xA1
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] Error status low byte DATA[6] =*(uint8_t *)(&errorState)
-        DATA[7] Error status high byte DATA[6] =*((uint8_t *)(&errorState)+1)
+        Parameters:
+        - torque: Desired torque value in amperes (-33 to 33 A).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - motor_temp: Motor temperature in degrees Celsius.
+        - torque_current: Torque current in amperes.
+        - motor_speed: Motor speed in degrees per second.
+        - encoder_position: Encoder position value.
         """
-        torque = int(torque * 100)
-        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_TORQUE_CLOSED_LOOP_CONTROL, 0x00, 0x00, 0x00, (torque >> 0) & 0xFF, (torque >> 8) & 0xFF, 0x00, 0x00])
+        # Ensure that the torque value is within the acceptable range
+        if torque > 33:
+            torque = 33
+        elif torque < -33:
+            torque = -33
+
+        # Convert the torque value to the required range
+        torque_current_raw = int(torque * (2048 / 33))
+
+        # Send command to control torque current output
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
+                                    data=[self.ADDR_TORQUE_CLOSED_LOOP_CONTROL, 0x00, 0x00, 0x00, 
+                                            (torque_current_raw >> 0) & 0xFF, (torque_current_raw >> 8) & 0xFF, 0x00, 0x00])
+        
+        # Extract motor parameters from the response
         motor_temp = msg.data[1]
-        torque_current = (msg.data[2] | (msg.data[3] << 8))
+        torque_current_raw = (msg.data[2] | (msg.data[3] << 8))
+        torque_current = torque_current_raw * (33 / 2048)  # Convert to amperes
         motor_speed = (msg.data[4] | (msg.data[5] << 8))
         encoder_position = (msg.data[6] | (msg.data[7] << 8))
-        if debug!=None :
+
+        # Print debug information if enabled
+        if debug != None:
             print(f"Motor temperature: {motor_temp}°C")
-            print(f"Torque current value (-2048~2048): {torque_current}")
+            print(f"Torque current value (-33~33A): {torque_current:.2f}A")
             print(f"Motor speed: {motor_speed}dps")
             print(f"Motor position value (0~16383): {encoder_position}")
-        return motor_temp, torque_current, motor_speed, encoder_position
-    
-    def speed_closed_loop_control(self, speed,debug=None):
-        """
-        The host sends this command to control the speed of the motor. 
-        The control value speedControl isoftype int32_t, corresponding to the actual speed of 0.01dps/LSB. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA2
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] Speed control low byte DATA[4] = *(uint8_t *)(&speedControl)
-        DATA[5] Speed control DATA[5] = *((uint8_t *)(&speedControl)+1)
-        DATA[6] Speed control DATA[6] = *((uint8_t *)(&speedControl)+2)
-        DATA[7] Speed control high byte DATA[7] = *((uint8_t *)(&speedControl)+3)
 
-        Memo:
-        1.The maximum torque current of the motor under this command is limited by the Max TorqueCurrent value in the host computer of debugging software. 
-        2.In this control mode, the maximum acceleration of the motor is limited by the Max Accelerationvalueinthe host computer of debugging software. 
-        
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command, the frame data contains the following parameters :
-        1.Motor temperature(int8_t type, 1℃/LSB)
-        2.Motor torque current(Iq)(int16_t type, range -2048~2048, corresponding to actual torque current range-33A~33A). 
-        3.Motor speed'int16_t type,1dps/LSB)
-        4.Encoder position value (uint16_t type, the value range of 16bit encoder is 0~65535). 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA2
-        DATA[1] Motor temperature DATA[1] = *(uint8_t *)(&temperature)
-        DATA[2] Torque current low byte DATA[2] = *(uint8_t *)(&iq)
-        DATA[3] Torque current high byte DATA[3] = *((uint8_t *)(&iq)+1)
-        DATA[4] Motor speed low byte DATA[4] = *(uint8_t *)(&speed)
-        DATA[5] Motor speed high byte DATA[5] = *((uint8_t *)(&speed)+1)
-        DATA[6] Encoder position low byte DATA[6] = *(uint8_t *)(&encoder)
-        DATA[7] Encoder position high byte DATA[7] = *((uint8_t *)(&encoder)+1)
+        return motor_temp, torque_current, motor_speed, encoder_position
+
+    def speed_closed_loop_control(self, speed, debug=None):
         """
-        speed = int(speed * 100)
-        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_SPEED_CLOSED_LOOP_CONTROL, 0x00, 0x00, 0x00, (speed >> 0) & 0xFF, (speed >> 8) & 0xFF, (speed >> 16) & 0xFF, (speed >> 24) & 0xFF])
+        Control the speed of the motor.
+
+        Command Structure:
+        - DATA[0]: Command byte (0xA2)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Speed control value (int32_t type, corresponding to the actual speed of 0.01 dps/LSB)
+
+        Response Structure:
+        - DATA[0]: Command byte (0xA2)
+        - DATA[1]: Motor temperature (int8_t type, 1℃/LSB)
+        - DATA[2-3]: Torque current (int16_t type, Range: -2048~2048, corresponding to the actual torque current range: -33A~33A)
+        - DATA[4-5]: Motor speed (int16_t type, 1dps/LSB)
+        - DATA[6-7]: Encoder position value (uint16_t type, 16-bit encoder value range: 0~65535)
+
+        Parameters:
+        - speed: Desired speed value in degrees per second (-327.68 to 327.67 dps).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - motor_temp: Motor temperature in degrees Celsius.
+        - torque_current: Torque current in amperes.
+        - motor_speed: Motor speed in degrees per second.
+        - encoder_position: Encoder position value.
+        """
+        # Ensure that the speed value is within the acceptable range
+        if speed > 327.67:
+            speed = 327.67
+        elif speed < -327.68:
+            speed = -327.68
+
+        # Convert the speed value to the required range
+        speed_control_raw = int(speed * 100)
+
+        # Send command to control motor speed
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
+                                    data=[self.ADDR_SPEED_CLOSED_LOOP_CONTROL, 0x00, 0x00, 0x00, 
+                                            (speed_control_raw >> 0) & 0xFF, (speed_control_raw >> 8) & 0xFF, 
+                                            (speed_control_raw >> 16) & 0xFF, (speed_control_raw >> 24) & 0xFF])
+        
+        # Extract motor parameters from the response
         motor_temp = msg.data[1]
-        torque_current = (msg.data[2] | (msg.data[3] << 8))
+        torque_current_raw = (msg.data[2] | (msg.data[3] << 8))
+        torque_current = torque_current_raw * (33 / 2048)  # Convert to amperes
         motor_speed = (msg.data[4] | (msg.data[5] << 8))
         encoder_position = (msg.data[6] | (msg.data[7] << 8))
-        if debug!=None :
+
+        # Print debug information if enabled
+        if debug != None:
             print(f"Motor temperature: {motor_temp}°C")
-            print(f"Torque current value (-2048~2048): {torque_current}")
-            print(f"Motor speed: {motor_speed}dps")
-            print(f"Motor position value (0~16383): {encoder_position}")
+            print(f"Torque current value (-33~33A): {torque_current:.2f}A")
+            print(f"Motor speed: {motor_speed:.2f}dps")
+            print(f"Motor position value (0~65535): {encoder_position}")
+
         return motor_temp, torque_current, motor_speed, encoder_position
 
-    def position_closed_loop_control_1(self, position,debug=None):
+    def position_closed_loop_control_1(self, target_position, wait_for_completion=True, debug=None):
         """
-        The host sends this command to control the position of the motor (multi-turn angle), the control valueangleControl is type of int32_t, and the corresponding actual position is 0.01degree/LSB, that is, 36000represents 360°, and the direction of rotation of the motor is determined by the difference betweenthetarget position and the current position. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA3
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] Position control low byte DATA[4] = *(uint8_t *)(&angleControl)
-        DATA[5] Position control DATA[5] = *((uint8_t *)(&angleControl)+1)
-        DATA[6] Position control DATA[6] = *((uint8_t *)(&angleControl)+2)
-        DATA[7] Position control high byte DATA[7] = *((uint8_t *)(&angleControl)+3)
+        Control the position of the motor (multi-turn angle).
 
-        Memo :
-        1.The control value angleControl under this command is limited by the Max Angle value in the host computer of debugging software. 
-        2.The maximum speed of the motor under this command is limited by the Max Speed value in the upper computer of debugging software. 
-        3.In this control mode, the maximum acceleration of the motor is limited by the Max Accelerationvalueinthe host computer of debugging software. 
-        4.In this control mode, the maximum torque current of the motor is limited by the Max TorqueCurrent value in the host computer of debugging software. 
-        
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command, the frame data contains the following parameters :
-        1.Motor temperature (int8_t type,1℃/LSB)
-        2.Motor torque current(Iq)(int16_t type, range -2048~2048, corresponding to actual torque current range-33A~33A). 
-        3.Motor speed (int16_t type, 1dps/LSB)
-        4.Encoder position value (uint16_t type, the value range of 16bit encoder is 0~65535). 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA3
-        DATA[1] Motor temperature DATA[1] = *(uint8_t *)(&temperature)
-        DATA[2] Torque current low byte DATA[2] = *(uint8_t *)(&iq)
-        DATA[3] Torque current high byte DATA[3] = *((uint8_t *)(&iq)+1)
-        DATA[4] Motor speed low byte DATA[4] = *(uint8_t *)(&speed)
-        DATA[5] Motor speed high byte DATA[5] = *((uint8_t *)(&speed)+1)
-        DATA[6] Encoder position low byte DATA[6] = *(uint8_t *)(&encoder)
-        DATA[7] Encoder position high byte DATA[7] = *((uint8_t *)(&encoder)+1)
-        """
-        position_control = int(position * 100)
-        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_POSITION_MULTITURN_CLOSED_LOOP_CONTROL, 0x00, 0x00, 0x00,(position_control >> 0) & 0xFF, (position_control >> 8) & 0xFF,(position_control >> 16) & 0xFF, (position_control >> 24) & 0xFF])
-        while True:
-            motor_angle = self.read_multiturn_encoder_angle(debug=True)
-            motor_temp, torque_current, motor_speed, encoder_position = self.read_motor_status_2()
-            if motor_angle>position-0.1 and motor_angle<position+0.1 and motor_speed==0.0: break
-        if debug!=None :
-            print(f"Motor temperature: {motor_temp}°C")
-            print(f"Torque current: {torque_current}A")
-            print(f"Motor speed: {motor_speed}dps")
-            print(f"Motor angle: {motor_angle}°")
-        return motor_temp, torque_current, motor_speed, motor_angle
-	
-    def position_closed_loop_control_2(self, speed, position,debug=None):
-        """
-        The host sends this command to control the position of the motor (multi-turn angle), the control valueangleControl is of type int32_t, and the corresponding actual position is 0.01degree/LSB, that is, 36000represents 360°, and the direction of rotation of the motor is determined by the difference betweenthetarget position and the current position. 
-        The control value maxSpeed limits the maximum speed of motor rotation, which is of typeuint16_t,corresponding to the actual speed of 1dps/LSB. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA4
-        DATA[1] NULL 0x00
-        DATA[2] Speed limit low byte DATA[2] = *(uint8_t *)(&maxSpeed)
-        DATA[3] Speed limit high byte DATA[3] = *((uint8_t *)(&maxSpeed)+1)
-        DATA[4] Position control low byte DATA[4] = *(uint8_t *)(&angleControl)
-        DATA[5] Position control DATA[5] = *((uint8_t *)(&angleControl)+1)
-        DATA[6] Position control DATA[6] = *((uint8_t *)(&angleControl)+2)
-        DATA[7] Position control high byte DATA[7] = *((uint8_t *)(&angleControl)+3)
+        Command Structure:
+        - DATA[0]: Command byte (0xA3)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Position control value
 
-        Memo :
+        Response Structure:
+        - DATA[0]: Command byte (0xA3)
+        - DATA[1]: Motor temperature (int8_t type, 1℃/LSB)
+        - DATA[2]: Torque current low byte
+        - DATA[3]: Torque current high byte
+        - DATA[4]: Motor speed low byte
+        - DATA[5]: Motor speed high byte
+        - DATA[6]: Encoder position low byte
+        - DATA[7]: Encoder position high byte
 
-        1.The control value angleControl under this command is limited by the Max Angle value in the host computer. 
-        2.In this control mode, the maximum acceleration of the motor is limited by the Max Accelerationvalueinthe host computer. 
-        3.In this control mode, the maximum torque current of the motor is limited by the Max TorqueCurrent value in the host computer. 
-        
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command, the frame data contains the following parameters:
-        1.Motor temperature (int8_t type, 1℃/LSB)
-        2.Motor torque current(Iq)(int16_t type, range -2048~2048, corresponding to actual torque current range-33A~33A). 
-        3.Motor speed (int16_t type, 1dps/LSB)
-        4.Encoder position value (uint16_t type, the value range of 16bit encoder is 0~65535). 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA4
-        DATA[1] Motor temperature DATA[1] = *(uint8_t *)(&temperature)
-        DATA[2] Torque current low byte DATA[2] = *(uint8_t *)(&iq)
-        DATA[3] Torque current high byte DATA[3] = *((uint8_t *)(&iq)+1)
-        DATA[4] Motor speed low byte DATA[4] = *(uint8_t *)(&speed)
-        DATA[5] Motor speed high byte DATA[5] = *((uint8_t *)(&speed)+1)
-        DATA[6] Encoder position low byte DATA[6] = *(uint8_t *)(&encoder)
-        DATA[7] Encoder position high byte DATA[7] = *((uint8_t *)(&encoder)+1)
-        """
-        max_speed = speed & 0xFFFF
-        angle_control = int(position * 100)
-        msg=self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_POSITION_MULTITURN_SPEED_CLOSED_LOOP_CONTROL, 0x00, (max_speed >> 0) & 0xFF, (max_speed >> 8) & 0xFF, (angle_control >> 0) & 0xFF, (angle_control >> 8) & 0xFF, (angle_control >> 16) & 0xFF, (angle_control >> 24) & 0xFF])
-        while True:
-            motor_angle = self.read_multiturn_encoder_angle(debug=True)
-            motor_temp, torque_current, motor_speed, encoder_position = self.read_motor_status_2()
-            if motor_angle>position-0.1 and motor_angle<position+0.1 and motor_speed==0.0: break
-        if debug!=None :
-            print(f"Motor temperature: {motor_temp}°C")
-            print(f"Torque current: {torque_current}A")
-            print(f"Motor speed: {motor_speed}dps")
-            print(f"Motor angle: {motor_angle}°")
-        return motor_temp, torque_current, motor_speed, motor_angle
-	
-    def position_closed_loop_control_3(self, direction, position,debug=None):
-        """
-        The host sends this command to control the position of the motor (single-turn angle), the control valueangleControl is of uint16_t type, the value range is 0~35999, and the corresponding actual positionis0.01degree/LSB, that is, the actual angle range is 0°~359.99°. 
-        The control value spinDirection sets the direction of motor rotation, which is of type uint8_t, 0x00meansclockwise, 0x01 means counterclockwise. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA5
-        DATA[1] Rotation direction byte DATA[1] = spinDirection
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] Position control low byte DATA[4] = *(uint8_t *)(&angleControl)
-        DATA[5] Position control high byte DATA[5] = *((uint8_t *)(&angleControl)+1)
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Parameters:
+        - target_position: Multiturn target position in degrees (0 to 42949672.95°).
+        - wait_for_completion: Boolean flag indicating whether to wait for the motor to reach the target position.
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - motor_temp: Motor temperature in degrees Celsius.
+        - torque_current: Torque current in amperes (-33A to +33A).
+        - motor_speed: Motor speed in degrees per second (dps).
+        - motor_angle: Current motor angle in degrees.
 
         Memo:
-        1.The maximum speed of the motor under this command is limited by the Max Speed value in the host computer. 
-        2.In this control mode, the maximum acceleration of the motor is limited by the Max Accelerationvalueinthe host computer. 
-        3.In this control mode, the maximum torque current of the motor is limited by the Max TorqueCurrent value in the host computer.
-
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command, the frame data contains the followingparameters :
-        1.Motor temperature (int8_t type, 1℃/LSB)
-        2.Motor torque current(Iq)(int16_t type, range -2048~2048, corresponding to actual torque current range-33A~33A). 
-        3.Motor speed (int16_t type,1dps/LSB)
-        4.Encoder position value (uint16_t type, the value range of 16bit encoder is 0~65535). 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA5
-        DATA[1] Motor temperature DATA[1] = *(uint8_t *)(&temperature)
-        DATA[2] Torque current low byte DATA[2] = *(uint8_t *)(&iq)
-        DATA[3] Torque current high byte DATA[3] = *((uint8_t *)(&iq)+1)
-        DATA[4] Motor speed low byte DATA[4] = *(uint8_t *)(&speed)
-        DATA[5] Motor speed high byte DATA[5] = *((uint8_t *)(&speed)+1)
-        DATA[6] Encoder position low byte DATA[6] = *(uint8_t *)(&encoder)
-        DATA[7] Encoder position high byte DATA[7] = *((uint8_t *)(&encoder)+1)
+        1. The control value angleControl under this command is limited by the Max Angle value in the host computer of debugging software. 
+        2. The maximum speed of the motor under this command is limited by the Max Speed value in the upper computer of debugging software. 
+        3. In this control mode, the maximum acceleration of the motor is limited by the Max Acceleration value in the host computer of debugging software. 
+        4. In this control mode, the maximum torque current of the motor is limited by the Max Torque Current value in the host computer of debugging software. 
         """
-        angle_control = int(position * 100)
-        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_POSITION_SINGLETURN_DIRECTION_CLOSED_LOOP_CONTROL,direction & 0xFF, 0x00, 0x00,(angle_control >> 0) & 0xFF, (angle_control >> 8) & 0xFF, 0x00, 0x00])
-        while True:
-            motor_angle = self.read_singleturn_encoder_angle(debug=True)
-            motor_temp, torque_current, motor_speed, encoder_position = self.read_motor_status_2()
-            if motor_angle>position-0.1 and motor_angle<position+0.1 and motor_speed==0.0: break
-        if debug!=None :
-            print(f"Motor temperature: {motor_temp}°C")
-            print(f"Torque current: {torque_current}A")
-            print(f"Motor speed: {motor_speed}dps")
-            print(f"Motor angle: {motor_angle}°")
+
+        # Convert angleControl to multiples of 0.01 degree (0.01 degree/LSB)
+        target_position = int(target_position * 100)
+
+        # Ensure target_position is within the valid range [0, 0xFFFFFFFF] (int32_t)
+        if target_position < 0 or target_position > 0xFFFFFFFF:
+            # Raise a ValueError if target_position is out of range
+            raise ValueError("Invalid target position value. Target position must be in the range [0, 42949672.95]°")
+
+        # Send command to control motor target_position
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
+                                    data=[self.ADDR_POSITION_MULTITURN_CLOSED_LOOP_CONTROL, 
+                                            0x00, 0x00, 0x00,
+                                            (target_position >> 0) & 0xFF, 
+                                            (target_position >> 8) & 0xFF,
+                                            (target_position >> 16) & 0xFF, 
+                                            (target_position >> 24) & 0xFF])
+
+        # Wait for motor to reach target position if specified
+        if wait_for_completion:
+            while True:
+                # Read current motor angle from multiturn encoder
+                motor_angle = self.read_multiturn_encoder_angle()
+                
+                # Read motor status (temperature, torque current, speed)
+                motor_temp, torque_current, motor_speed, encoder_position = self.read_motor_status_2()
+                
+                # Clear previous debug messages
+                sys.stdout.write("\033[F")  # Move cursor up one line
+                sys.stdout.write("\033[K")  # Clear the line
+                
+                # Print debug information
+                if debug:
+                    print(f"Motor temperature: {motor_temp}°C")
+                    print(f"Torque current: {torque_current}A")
+                    print(f"Motor speed: {motor_speed}dps")
+                    print(f"Motor angle: {motor_angle}°")
+                
+                # Exit loop when motor reaches target position and speed is zero
+                if abs(motor_angle - target_position) < 0.1 and motor_speed == 0.0:
+                    break
+        elif debug:
+            # Print debug information if specified
+            print("Debug information:")
+            print(f"Initial position: {self.read_multiturn_encoder_angle()}°")
+            print(f"Target position: {target_position}°")
+        
         return motor_temp, torque_current, motor_speed, motor_angle
 
-    def position_closed_loop_control_4(self, speed, direction, position,debug=None):
+    def position_closed_loop_control_2(self, speed, target_position, wait_for_completion=True, debug=None):
         """
-        The host sends this command to control the position of the motor (single turn angle). 
-        1.AngleControl is of uint16_t type, the value range is 0~35999, and the corresponding actual positionis0.01degree/LSB, that is, the actual angle range is 0°~359.99°. 
-        2.spinDirection sets the direction of motor rotation, which is of uint8_t type, 0x00 means clockwise, 0x01means counterclockwise
-        3.maxSpeed limits the maximum speed of motor rotation, which is of uint16_t type, correspondingtotheactual speed of 1dps/LSB. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA6
-        DATA[1] Rotation direction byte DATA[1] = spinDirection
-        DATA[2] Speed limit low byte DATA[2] = *(uint8_t *)(&maxSpeed)
-        DATA[3] Speed limit high byte DATA[3] = *((uint8_t *)(&maxSpeed)+1)
-        DATA[4] Position control low byte DATA[4] = *(uint8_t *)(&angleControl)
-        DATA[5] Position control high byte DATA[5] = *((uint8_t *)(&angleControl)+1)
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Control the position of the motor (multi-turn angle) with speed limit.
+
+        Command Structure:
+        - DATA[0]: Command byte (0xA4)
+        - DATA[1]: NULL byte
+        - DATA[2-3]: Speed limit (uint16_t type, 1dps/LSB)
+        - DATA[4-7]: Position control value (int32_t type, 0.01 degree/LSB)
+
+        Response Structure:
+        - DATA[0]: Command byte (0xA4)
+        - DATA[1]: Motor temperature (int8_t type, 1℃/LSB)
+        - DATA[2]: Torque current low byte
+        - DATA[3]: Torque current high byte
+        - DATA[4]: Motor speed low byte
+        - DATA[5]: Motor speed high byte
+        - DATA[6]: Encoder position low byte
+        - DATA[7]: Encoder position high byte
+
+        Parameters:
+        - speed: Maximum speed limit for motor rotation in degrees per second (0 to 65535dps).
+        - target_position: Target position in degrees (0 to 42949672.95°).
+        - wait_for_completion: Boolean flag indicating whether to wait for the motor to reach the target position.
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - motor_temp: Motor temperature in degrees Celsius.
+        - torque_current: Torque current in amperes (-33A to +33A).
+        - motor_speed: Motor speed in degrees per second (dps).
+        - motor_angle: Current motor angle in degrees.
 
         Memo:
-        1.In this control mode, the maximum acceleration of the motor is limited by the Max Accelerationvalueinthe host computer. 
-        2.In this control mode, the maximum torque current of the motor is limited by the Max TorqueCurrent value in the host computer.
-        
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command, the frame data contains the following parameters:
-        1. Motor temperature (int8_t type, 1℃/LSB)
-        2.Motor torque current(Iq)(int16_t type, range -2048~2048, corresponding to actual torque current range-33A~33A). 
-        3.Motor speed (int16_t type, 1dps/LSB)
-        4.Encoder position value (uint16_t type, the value range of 16bit encoder is 0~65535)
-
-        Data field Description Data
-        DATA[0] Command byte 0xA6
-        DATA[1] Motor temperature DATA[1] = *(uint8_t *)(&temperature)
-        DATA[2] Torque current low byte DATA[2] = *(uint8_t *)(&iq)
-        DATA[3] Torque current high byte DATA[3] = *((uint8_t *)(&iq)+1)
-        DATA[4] Motor speed low byte DATA[4] = *(uint8_t *)(&speed)
-        DATA[5] Motor speed high byte DATA[5] = *((uint8_t *)(&speed)+1)
-        DATA[6] Encoder position low byte DATA[6] = *(uint8_t *)(&encoder)
-        DATA[7] Encoder position high byte DATA[7] = *((uint8_t *)(&encoder)+1)
-        """
-        angle_control = int(position * 100)
-        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, data=[self.ADDR_POSITION_SINGLETURN_SPEED_DIRECTION_CLOSED_LOOP_CONTROL,direction & 0xFF,(speed >> 0) & 0xFF, (speed >> 8) & 0xFF,
-(angle_control >> 0) & 0xFF, (angle_control >> 8) & 0xFF,0x00, 0x00])
-        while True:
-            motor_angle = self.read_singleturn_encoder_angle(debug=True)
-            motor_temp, torque_current, motor_speed, encoder_position = self.read_motor_status_2()
-            if motor_angle>position-0.1 and motor_angle<position+0.1 and motor_speed==0.0: break
-        if debug!=None :
-            print(f"Motor temperature: {motor_temp}°C")
-            print(f"Torque current: {torque_current}A")
-            print(f"Motor speed: {motor_speed}dps")
-            print(f"Motor angle: {motor_angle}°")
-        return motor_temp, torque_current, motor_speed, motor_angle
-    
-    def position_closed_loop_control_5(self,angleControl,debug=None):
-        """
-        The host sends this command to control the incremental position of the motor (multi-turn angle), andrunthe input position increment with the current position as the starting point. 
-        The control value angleControl is of type int32_t, and the corresponding actual position is 0.01degree/LSB, that is, 36000represents360° , 
-        The direction of motor rotation is determined by the incremental position sign. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA7
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] Position control low byte DATA[4] = *(uint8_t *)(&angleControl)
-        DATA[5] Position control DATA[5] = *((uint8_t *)(&angleControl)+1)
-        DATA[6] Position control DATA[6] = *((uint8_t *)(&angleControl)+2)
-        DATA[7] Position control high byte DATA[7] = *((uint8_t *)(&angleControl)+3)
-
-        Memo:
-        1. The control value angleControl under this command is limited by the Max Angle value in the host computer. 
-        2. The maximum speed of the motor under this command is limited by the Max Speed value in the host computer. 
-        3. In this control mode, the maximum acceleration of the motor is limited by the Max Acceleration value in the host computer. 
-        4. In this control mode, the maximum torque current of the motor is limited by the Max TorqueCurrent value in the host computer. 
-        
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command, the frame data contains the following parameters:
-        1. motor temperature (int8_t type, 1℃/LSB)
-        2. Motor torque current(Iq)(int16_t type, range -2048~2048, corresponding to actual torque current range-33A~33A). 
-        3. motor speed(int16_t type, 1dps/LSB). 4. Encoder position value (uint16_t type, the value range of 16bit encoder is 0~65535)
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA7
-        DATA[1] Motor temperature DATA[1] = *(uint8_t *)(&temperature)
-        DATA[2] Torque current low byte DATA[2] = *(uint8_t *)(&iq)
-        DATA[3] Torque current high byte DATA[3] = *((uint8_t *)(&iq)+1)
-        DATA[4] Motor speed low byte DATA[4] = *(uint8_t *)(&speed)
-        DATA[5] Motor speed high byte DATA[5] = *((uint8_t *)(&speed)+1)
-        DATA[6] Encoder position low byte DATA[6] = *(uint8_t *)(&encoder)
-        DATA[7] Encoder position high byte DATA[7] = *((uint8_t *)(&encoder)+1)
-        """
-
-    def position_closed_loop_control_6(self,maxSpeed,angleControl,debug=None):
-        """
-        The host sends this command to control the incremental position (multi-turn angle) of themotor, andruns the input position increment with the current position as the starting point. 
-        The control valueangleControl is of type int32_t, and the corresponding actual position is 0.01degree/LSB, that is, 36000represents 360°, and the motor rotation direction is determined by the incremental position sign. 
-        The control value maxSpeed limits the maximum speed of motor rotation, which is of typeuint16_t,corresponding to the actual speed of 1dps/LSB. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0xA8
-        DATA[1] NULL 0x00
-        DATA[2] Speed limit low byte DATA[2] = *(uint8_t *)(&maxSpeed)
-        DATA[3] Speed limit high byte DATA[3] = *((uint8_t *)(&maxSpeed)+1)
-        DATA[4] Position control low byte DATA[4] = *(uint8_t *)(&angleControl)
-        DATA[5] Position control DATA[5] = *((uint8_t *)(&angleControl)+1)
-        DATA[6] Position control DATA[6] = *((uint8_t *)(&angleControl)+2)
-        DATA[7] Position control high byte DATA[7] = *((uint8_t *)(&angleControl)+3)
-
-        Memo:
-        1.The control value angleControl under this command is limited by the Max Angle value in the host computer. 
-        2. In this control mode, the maximum acceleration of the motor is limited by the Max Acceleration value in the host computer. 
+        1. The control value angleControl under this command is limited by the Max Angle value in the host computer.
+        2. In this control mode, the maximum acceleration of the motor is limited by the Max Acceleration value in the host computer.
         3. In this control mode, the maximum torque current of the motor is limited by the Max TorqueCurrent value in the host computer.
-         
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command, the frame data contains the followingparameters:
-        1.Motor temperature (int8_t type, 1℃/LSB)
-        2.Motor torque current(Iq)(int16_t type, range -2048~2048, corresponding to actual torque current range-33A~33A)
-        3.Motor speed (int16_t type, 1dps/LSB)
-        4.Encoder position value (uint16_t type, the value range of 16bit encoder is 0~65535). 
+        """
+        # Convert angleControl to multiples of 0.01 degree (0.01 degree/LSB)
+        target_position = int(target_position * 100)
+
+        # Ensure target_position is within the valid range [0, 0xFFFFFFFF] (int32_t)
+        if target_position < 0 or target_position > 0xFFFFFFFF:
+            # Raise a ValueError if target_position is out of range
+            raise ValueError("Invalid target position value. Target position must be in the range [0, 42949672.95]°")
         
-        Data field Description Data
-        DATA[0] Command byte 0xA8
-        DATA[1] Motor temperature DATA[1] = *(uint8_t *)(&temperature)
-        DATA[2] Torque current low byte DATA[2] = *(uint8_t *)(&iq)
-        DATA[3] Torque current high byte DATA[3] = *((uint8_t *)(&iq)+1)
-        DATA[4] Motor speed low byte DATA[4] = *(uint8_t *)(&speed)
-        DATA[5] Motor speed high byte DATA[5] = *((uint8_t *)(&speed)+1)
-        DATA[6] Encoder position low byte DATA[6] = *(uint8_t *)(&encoder)
-        DATA[7] Encoder position high byte DATA[7] = *((uint8_t *)(&encoder)+1)
-        """
-
-
-    def system_operation_mode_aquisition(self,debug=None):
-        """
-        This command reads the current motor running mode. Data field Description Data
-        DATA[0] Command byte 0x70
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
-
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command, and the drive reply data contains theparameter run mode operating status, which is of type uint8_t. 
-        The motor operation mode has the following 4 states :
-        1.Current loop mode(0x00). 
-        2.Speed loop mode(0x01). 
-        3.Position loop mode(0x02). 
-        4.Power-on initialization state, not in three-ring mode(0xFF).
-
-        Data field Description Data
-        DATA[0] Command byte 0x70
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] Motor running mode DATA[7] = *(uint8_t *)(&runmode)
-        """
-
-    def motor_power_acquisition(self,debug=None):
-        """
-        This command reads the current motor running mode. 
+        # Ensure speed is within the valid range [0, 65535]
+        if speed < 0 or speed > 0xFFFF:
+            # Raise a ValueError if speed is out of range
+            raise ValueError("Invalid speed value. Speed must be in the range [0, 65535]")
         
-        Data field Description Data
-        DATA[0] Command byte 0x71
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
-
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command. 
-        The drive response data containsthemotor power parameter motor power, which is of type uint16_t, the unit is watts, and the unit is 0.1w/LSB. 
+        # Convert target_position to multiples of 0.01 degree (0.01 degree/LSB)
+        angle_control = int(target_position * 100)
         
-        Data field Description Data
-        DATA[0] Command byte 0x71
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] Motor running power low byte DATA[6] = *(uint8_t *)(&motorpower)
-        DATA[7] Motor running power high byte DATA[7] = *((uint8_t *)(&motorpower)+1)
+        # Send command to control motor target_position with speed limit
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
+                                    data=[self.ADDR_POSITION_MULTITURN_SPEED_CLOSED_LOOP_CONTROL,
+                                            0x00, 
+                                            (speed >> 0) & 0xFF, 
+                                            (speed >> 8) & 0xFF, 
+                                            (angle_control >> 0) & 0xFF, 
+                                            (angle_control >> 8) & 0xFF,
+                                            (angle_control >> 16) & 0xFF, 
+                                            (angle_control >> 24) & 0xFF])
+        
+        # Wait for motor to reach target position if specified
+        if wait_for_completion:
+            while True:
+                # Read current motor angle from multiturn encoder
+                motor_angle = self.read_multiturn_encoder_angle()
+                
+                # Read motor status (temperature, torque current, speed)
+                motor_temp, torque_current, motor_speed, encoder_position = self.read_motor_status_2()
+                
+                # Clear previous debug messages
+                sys.stdout.write("\033[F")  # Move cursor up one line
+                sys.stdout.write("\033[K")  # Clear the line
+                
+                # Print debug information
+                if debug:
+                    print(f"Motor temperature: {motor_temp}°C")
+                    print(f"Torque current: {torque_current}A")
+                    print(f"Motor speed: {motor_speed}dps")
+                    print(f"Motor angle: {motor_angle}°")
+                
+                # Exit loop when motor reaches target position and speed is zero
+                if abs(motor_angle - target_position) < 0.1 and motor_speed == 0.0:
+                    break
+        elif debug:
+            # Print debug information if specified
+            print("Debug information:")
+            print(f"Initial position: {self.read_multiturn_encoder_angle()}°")
+            print(f"Target position: {target_position}°")
+        
+        return motor_temp, torque_current, motor_speed, motor_angle
+	
+    def position_closed_loop_control_3(self, direction, position, wait_for_completion=True, debug=None):
+        """
+        Control the position of the motor (single-turn angle) with specified rotation direction.
+
+        Command Structure:
+        - DATA[0]: Command byte (0xA5)
+        - DATA[1]: Rotation direction byte (spinDirection)
+        - DATA[2-3]: NULL bytes
+        - DATA[4-5]: Position control value (uint16_t type, 0.01 degree/LSB)
+        - DATA[6-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0xA5)
+        - DATA[1]: Motor temperature (int8_t type, 1℃/LSB)
+        - DATA[2]: Torque current low byte
+        - DATA[3]: Torque current high byte
+        - DATA[4]: Motor speed low byte
+        - DATA[5]: Motor speed high byte
+        - DATA[6]: Encoder position low byte
+        - DATA[7]: Encoder position high byte
+
+        Parameters:
+        - direction: Rotation direction of the motor (0x00 for clockwise, 0x01 for counterclockwise).
+        - position: Target position in degrees (0 to 360°).
+        - wait_for_completion: Boolean flag indicating whether to wait for the motor to reach the target position.
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - motor_temp: Motor temperature in degrees Celsius.
+        - torque_current: Torque current in amperes (-33A to +33A).
+        - motor_speed: Motor speed in degrees per second (dps).
+        - motor_angle: Current motor angle in degrees.
+
+        Memo:
+        1. The maximum speed of the motor under this command is limited by the Max Speed value in the host computer.
+        2. In this control mode, the maximum acceleration of the motor is limited by the Max Acceleration value in the host computer.
+        3. In this control mode, the maximum torque current of the motor is limited by the Max TorqueCurrent value in the host computer.
         """
 
-    def get_battery_voltage_value(self,debug=None):
-        """
-        This command reads the current auxiliary battery voltage. 
+         # Ensure position is within the valid range [0, 360]
+        if position < 0 or position > 360:
+            # Raise a ValueError if position is out of range
+            raise ValueError("Invalid position value. Position must be in the range [0, 360]")
+
+        # Ensure direction is either 0x00 or 0x01
+        if direction not in [0x00, 0x01]:
+            # Raise a ValueError if direction is incorrect
+            raise ValueError("Invalid direction value. Direction must be 0x00 (clockwise) or 0x01 (counterclockwise)")
         
-        Data field Description Data
-        DATA[0] Command byte 0x72
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
-
-        Drive response (1 frame)
-        The motor will reply to the host after receiving the command. 
-        The driver reply data contains theauxiliarybattery voltage parameter batvoltage, which is of type uint8_t, the unit is volts, and the unit is 0.1v/LSB
-
-        Data field Description Data
-        DATA[0] Command byte 0x72
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] High battery voltage DATA[7] = *(uint8_t *)(&batvoltage)
-        """
-
-    def feedforward_setting(self,TFCurrent,encoder,debug=None):
-        """
-        This command sets the current feedforward current size, the parameters are as follows. 
-        1.TF feedforward current value TFCurrent of the motor (int16_t type,unit A, zoom in 100 times in current mode, such as 10 corresponds to 0.1A)
-        2.Encoder position multi-turn encoder (int32_t type). 
+        # Convert position to multiples of 0.01 degree (0.01 degree/LSB)
+        angle_control = int(position * 100)
         
-        Data field Description Data
-        DATA[0] Command byte 0x73
-        DATA[1] NULL 0x00
-        DATA[2] TF feedforward current value low byte DATA[6] = *(uint8_t *)(&TFCurrent)
-        DATA[3] TF feedforward current value high byte DATA[7] = *((uint8_t *)(&TFCurrent)+1)
-        DATA[4] Encoder position low byte 1 DATA[4] = *(uint8_t *)(&encoder)
-        DATA[5] Encoder position low byte 2 DATA[5] = *((uint8_t *)(&encoder)+1)
-        DATA[6] Encoder position low byte 3 DATA[6] = *((uint8_t *)(&encoder)+2)
-        DATA[7] Encoder position low byte 4 DATA[7] = *((uint8_t *)(&encoder)+3)
-
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command,the following parameters are includedinthe driver response data. 
-        1. Motor torque current(Iq)(int16_t type, zoom in 100 times in current mode, such as 10 correspondsto0.1A)
-        2. motor speed (int16_t type, 1dps/LSB)
-        3. Encoder position multi-turn encoder (int32_t type). 
+        # Send command to control motor position with specified direction
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
+                                       data=[self.ADDR_POSITION_SINGLETURN_DIRECTION_CLOSED_LOOP_CONTROL, 
+                                             direction & 0xFF, 0x00, 0x00,
+                                             (angle_control >> 0) & 0xFF, 
+                                             (angle_control >> 8) & 0xFF, 
+                                             0x00, 0x00])
         
-        Data field Description Data
-        DATA[0] Torque current low byte DATA[0] = *(uint8_t *)(&iq)
-        DATA[1] Torque current high byte DATA[1] = *((uint8_t *)(&iq)+1)
-        DATA[2] Motor speed low byte DATA[2] = *(uint8_t *)(&speed)
-        DATA[3] Motor speed low byte DATA[3] = *((uint8_t *)(&speed)+1)
-        DATA[4] Encoder position low byte 1 DATA[4] = *(uint8_t *)(&encoder)
-        DATA[5] Encoder position byte 2 DATA[5] = *((uint8_t *)(&encoder)+1)
-        DATA[6] Encoder position byte 3 DATA[6] = *((uint8_t *)(&encoder)+2)
-        DATA[7] Encoder position byte 4 DATA[7] = *((uint8_t *)(&encoder)+3)
+        # Wait for motor to reach target position if specified
+        if wait_for_completion:
+            while True:
+                # Read current motor angle from single-turn encoder
+                motor_angle = self.read_singleturn_encoder_angle()
+                
+                # Read motor status (temperature, torque current, speed)
+                motor_temp, torque_current, motor_speed, encoder_position = self.read_motor_status_2()
+                
+                # Clear previous debug messages
+                sys.stdout.write("\033[F")  # Move cursor up one line
+                sys.stdout.write("\033[K")  # Clear the line
+                
+                # Print debug information
+                if debug:
+                    print(f"Motor temperature: {motor_temp}°C")
+                    print(f"Torque current: {torque_current}A")
+                    print(f"Motor speed: {motor_speed}dps")
+                    print(f"Motor angle: {motor_angle}°")
+                
+                # Exit loop when motor reaches target position and speed is zero
+                if abs(motor_angle - position) < 0.1 and motor_speed == 0.0:
+                    break
+        elif debug:
+            # Print debug information if specified
+            print("Debug information:")
+            print(f"Initial position: {self.read_singleturn_encoder_angle()}°")
+            print(f"Target position: {position}°")
+        
+        return motor_temp, torque_current, motor_speed, motor_angle
+
+    def position_closed_loop_control_4(self, speed, direction, position, wait_for_completion=True, debug=None):
         """
+        Control the position of the motor (single-turn angle) with specified rotation direction and speed limit.
 
-    def system_reset(self,debug=None):
-        """
-        This command is used to reset the system software. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0x76
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Command Structure:
+        - DATA[0]: Command byte (0xA6)
+        - DATA[1]: Rotation direction byte (spinDirection)
+        - DATA[2-3]: Speed limit (uint16_t type, 1dps/LSB)
+        - DATA[4-5]: Position control value (uint16_t type, 0.01 degree/LSB)
+        - DATA[6-7]: NULL bytes
 
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command,the frame data is the same as that sent by the host. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0x76
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
-        """
+        Response Structure:
+        - DATA[0]: Command byte (0xA6)
+        - DATA[1]: Motor temperature (int8_t type, 1℃/LSB)
+        - DATA[2]: Torque current low byte
+        - DATA[3]: Torque current high byte
+        - DATA[4]: Motor speed low byte
+        - DATA[5]: Motor speed high byte
+        - DATA[6]: Encoder position low byte
+        - DATA[7]: Encoder position high byte
 
-    def system_brake_opening(self,debug=None):
-        """
-        This command is used to open the system brake. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0x77
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Parameters:
+        - speed: Maximum speed limit for motor rotation in degrees per second (dps).
+        - direction: Rotation direction of the motor (0x00 for clockwise, 0x01 for counterclockwise).
+        - position: Target position in degrees (0 to 360°).
+        - wait_for_completion: Boolean flag indicating whether to wait for the motor to reach the target position.
+        - debug: Boolean flag indicating whether to print debug information.
 
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command,the frame data is the same as that sent bythe host. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0x77
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        Returns:
+        - motor_temp: Motor temperature in degrees Celsius.
+        - torque_current: Torque current in amperes (-33A to +33A).
+        - motor_speed: Motor speed in degrees per second (dps).
+        - motor_angle: Current motor angle in degrees.
+
+        Memo:
+        1. In this control mode, the maximum acceleration of the motor is limited by the Max Acceleration value in the host computer.
+        2. In this control mode, the maximum torque current of the motor is limited by the Max TorqueCurrent value in the host computer.
         """
 
-    def system_brake_close(self,debug=None):
-        """
-        This command is used to open the system brake. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0x78
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        # Ensure position is within the valid range [0, 360]
+        if position < 0 or position > 360:
+            # Raise a ValueError if position is out of range
+            raise ValueError("Invalid position value. Position must be in the range [0, 360]")
 
-        Drive response (1 frame)
-        The motor responds to the host after receiving the command,the frame data is the same as that sent bythe host. 
+        # Ensure speed is within the valid range [0, 65535]
+        if speed < 0 or speed > 0xFFFF:
+            # Raise a ValueError if speed is out of range
+            raise ValueError("Invalid speed value. Speed must be in the range [0, 65535]")
+
+        # Ensure direction is either 0x00 or 0x01
+        if direction not in [0x00, 0x01]:
+            # Raise a ValueError if direction is incorrect
+            raise ValueError("Invalid direction value. Direction must be 0x00 (clockwise) or 0x01 (counterclockwise)")
+
+        # Convert position to multiples of 0.01 degree (0.01 degree/LSB)
+        angle_control = int(position * 100)
         
-        Data field Description Data
-        DATA[0] Command byte 0x78
-        DATA[1] NULL 0x00
-        DATA[2] NULL 0x00
-        DATA[3] NULL 0x00
-        DATA[4] NULL 0x00
-        DATA[5] NULL 0x00
-        DATA[6] NULL 0x00
-        DATA[7] NULL 0x00
+        # Send command to control motor position with specified direction and speed limit
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id, 
+                                    data=[self.ADDR_POSITION_SINGLETURN_SPEED_DIRECTION_CLOSED_LOOP_CONTROL, 
+                                            direction & 0xFF, 
+                                            (speed >> 0) & 0xFF, 
+                                            (speed >> 8) & 0xFF,
+                                            (angle_control >> 0) & 0xFF, 
+                                            (angle_control >> 8) & 0xFF, 
+                                            0x00, 0x00])
+        
+        # Wait for motor to reach target position if specified
+        if wait_for_completion:
+            while True:
+                # Read current motor angle from single-turn encoder
+                motor_angle = self.read_singleturn_encoder_angle()
+                
+                # Read motor status (temperature, torque current, speed)
+                motor_temp, torque_current, motor_speed, encoder_position = self.read_motor_status_2()
+                
+                # Clear previous debug messages
+                sys.stdout.write("\033[F")  # Move cursor up one line
+                sys.stdout.write("\033[K")  # Clear the line
+                
+                # Print debug information
+                if debug:
+                    print(f"Motor temperature: {motor_temp}°C")
+                    print(f"Torque current: {torque_current}A")
+                    print(f"Motor speed: {motor_speed}dps")
+                    print(f"Motor angle: {motor_angle}°")
+                
+                # Exit loop when motor reaches target position and speed is zero
+                if abs(motor_angle - position) < 0.1 and motor_speed == 0.0:
+                    break
+        elif debug:
+            # Print debug information if specified
+            print("Debug information:")
+            print(f"Initial position: {self.read_singleturn_encoder_angle()}°")
+            print(f"Target position: {position}°")
+        
+        return motor_temp, torque_current, motor_speed, motor_angle
+
+    def position_closed_loop_control_5(self, target_position, wait_for_completion=True, debug=None):
+        """
+        Control the incremental position of the motor (multi-turn angle) with specified angle control value.
+
+        Command Structure:
+        - DATA[0]: Command byte (0xA7)
+        - DATA[1-3]: NULL bytes
+        - DATA[4-7]: Angle control value (int32_t type, 0.01 degree/LSB)
+
+        Response Structure:
+        - DATA[0]: Command byte (0xA7)
+        - DATA[1]: Motor temperature (int8_t type, 1℃/LSB)
+        - DATA[2]: Torque current low byte
+        - DATA[3]: Torque current high byte
+        - DATA[4]: Motor speed low byte
+        - DATA[5]: Motor speed high byte
+        - DATA[6]: Encoder position low byte
+        - DATA[7]: Encoder position high byte
+
+        Parameters:
+        - target_position: Incremental position control value in degrees (0 to 42949672.95°).
+        - wait_for_completion: Boolean flag indicating whether to wait for the motor to reach the target position.
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - motor_temp: Motor temperature in degrees Celsius.
+        - torque_current: Torque current in amperes (-33A to +33A).
+        - motor_speed: Motor speed in degrees per second (dps).
+        - motor_angle: Current motor angle in degrees.
         """
 
-    def CAN_ID(self,debug=None):
+        # Convert target_position to multiples of 0.01 degree (0.01 degree/LSB)
+        target_position = int(target_position * 100)
+
+        # Ensure target_position is within the valid range [0, 0xFFFFFFFF] (int32_t)
+        if target_position < 0 or target_position > 0xFFFFFFFF:
+            # Raise a ValueError if position is out of range
+            raise ValueError("Invalid position value. Position must be in the range [0, 42949672.95]°")
+
+        # Get initial motor target_position
+        initial_position = self.read_multiturn_encoder_angle()
+
+        # Send command to control motor position with specified angle control value
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id,
+                                        data=[self.ADDR_POSITION_MULTITURN_INCREMENTAL_CLOSED_LOOP_CONTROL,
+                                                0x00, 0x00, 0x00,
+                                                (target_position >> 0) & 0xFF,
+                                                (target_position >> 8) & 0xFF,
+                                                (target_position >> 16) & 0xFF,
+                                                (target_position >> 24) & 0xFF])
+
+        # Wait for motor to reach target position if specified
+        if wait_for_completion:
+            while True:
+                # Read current motor angle from multiturn encoder
+                motor_angle = self.read_multiturn_encoder_angle()
+
+                # Read motor status (temperature, torque current, speed)
+                motor_temp, torque_current, motor_speed, encoder_position = self.read_motor_status_2()
+
+                # Clear previous debug messages
+                sys.stdout.write("\033[F")  # Move cursor up one line
+                sys.stdout.write("\033[K")  # Clear the line
+
+                # Print debug information
+                if debug:
+                    print(f"Motor temperature: {motor_temp}°C")
+                    print(f"Torque current: {torque_current}A")
+                    print(f"Motor speed: {motor_speed}dps")
+                    print(f"Motor angle: {motor_angle}°")
+
+                # Exit loop when motor reaches target position and speed is zero
+                if abs(initial_position + target_position - motor_angle) < 0.1 and motor_speed == 0.0:
+                    break
+
+        return motor_temp, torque_current, motor_speed, motor_angle
+
+    def position_closed_loop_control_6(self, maxSpeed, target_position, wait_for_completion=True, debug=None):
         """
-        This command is used to set and read CAN ID. The host sends this command to set and read CAN ID. 
-        The parameters are as follows. 
-        1.The read and write flag bit is bool type, 1 read 0 write. 
-        2.CANID,Size range (#1~#32), uint16_t type (synchronized with the host computer function), deviceidentifier 0x140 + ID (1~32). 
-        
-        Data field Description Data
-        DATA[0] Command byte 0x79
-        DATA[1] NULL 0x00
-        DATA[2] Read and write flags DATA[2] = wReadWriteFlag
-        DATA[3] NULL 0x00
-        DATA[4] CANID low byte1 DATA[4] = *(uint8_t *)(&CANID)
-        DATA[5] CANID byte 2 DATA[5] = *((uint8_t *)(&CANID)+1)
-        DATA[6] CANID byte 3 DATA[6] = *((uint8_t *)(&CANID)+2)
-        DATA[7] CANID byte 4 DATA[7] = *((uint8_t *)(&CANID)+3)
-        
-        Driver reply (one frame)
-        1.The motor responds to the host after receiving the command,which is divided into the followingtwoSituations. 
-        2.Set CANID, range 1-32, and return to the original command. 
-        3.Read CANID, return parameters are as follows. 
-        
-        Data field Description Data
-        DATA[0] Command byte 0x79
-        DATA[0] NULL 0x00
-        DATA[0] Read and write flags DATA[2] = wReadWriteFlag
-        DATA[0] NULL 0x00
-        DATA[4] CANID low byte 1 DATA[4] = *(uint8_t *)(&CANID)
-        DATA[5] CANID byte 2 DATA[5] = *((uint8_t *)(&CANID)+1)
-        DATA[6] CANID byte 3 DATA[6] = *((uint8_t *)(&CANID)+2)
-        DATA[7] CANID byte 4 DATA[7] = *((uint8_t *)(&CANID)+3)
+        Control the incremental position (multi-turn angle) of the motor with specified angle control value and maximum speed limit.
+
+        Command Structure:
+        - DATA[0]: Command byte (0xA8)
+        - DATA[1]: NULL byte (0x00)
+        - DATA[2-3]: Maximum speed limit (uint16_t type, 1dps/LSB)
+        - DATA[4-7]: Angle control value (int32_t type, 0.01 degree/LSB)
+
+        Response Structure:
+        - DATA[0]: Command byte (0xA8)
+        - DATA[1]: Motor temperature (int8_t type, 1℃/LSB)
+        - DATA[2]: Torque current low byte
+        - DATA[3]: Torque current high byte
+        - DATA[4]: Motor speed low byte
+        - DATA[5]: Motor speed high byte
+        - DATA[6]: Encoder position low byte
+        - DATA[7]: Encoder position high byte
+
+        Parameters:
+        - maxSpeed: Maximum speed limit for motor rotation in degrees per second (0 to 65535dps).
+        - target_position: Incremental position control value in degrees (0 to 42949672.95°).
+        - wait_for_completion: Boolean flag indicating whether to wait for the motor to reach the target position.
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - motor_temp: Motor temperature in degrees Celsius.
+        - torque_current: Torque current in amperes (-33A to +33A).
+        - motor_speed: Motor speed in degrees per second (dps).
+        - motor_angle: Current motor angle in degrees.
         """
+        # Convert angleControl to multiples of 0.01 degree (0.01 degree/LSB)
+        target_position = int(target_position * 100)
+
+        # Ensure target_position is within the valid range [0, 0xFFFFFFFF] (int32_t)
+        if target_position < 0 or target_position > 0xFFFFFFFF:
+            # Raise a ValueError if target_position is out of range
+            raise ValueError("Invalid target position value. Target position must be in the range [0, 42949672.95]°")
+
+        # Ensure maxSpeed is within the valid range [0, 0xFFFF] (uint16_t)
+        if maxSpeed < 0 or maxSpeed > 0xFFFF:
+            # Raise a ValueError if maxSpeed is out of range
+            raise ValueError("Invalid maxSpeed value. MaxSpeed must be in the range [0, 65535]dps")
+
+        # Send command to control motor target_position with specified angle control value and maximum speed limit
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id,
+                                        data=[self.ADDR_POSITION_MULTITURN_INCREMENTAL_SPEED_CLOSED_LOOP_CONTROL,
+                                                0x00,
+                                                (maxSpeed >> 0) & 0xFF,
+                                                (maxSpeed >> 8) & 0xFF,
+                                                (target_position >> 0) & 0xFF,
+                                                (target_position >> 8) & 0xFF,
+                                                (target_position >> 16) & 0xFF,
+                                                (target_position >> 24) & 0xFF])
+
+        # Wait for motor to reach target position if specified
+        if wait_for_completion:
+            # Get initial motor position
+            initial_position = self.read_multiturn_encoder_angle()
+
+            while True:
+                # Read current motor angle from multiturn encoder
+                motor_angle = self.read_multiturn_encoder_angle()
+
+                # Read motor status (temperature, torque current, speed)
+                motor_temp, torque_current, motor_speed, encoder_position = self.read_motor_status_2()
+
+                # Clear previous debug messages
+                sys.stdout.write("\033[F")  # Move cursor up one line
+                sys.stdout.write("\033[K")  # Clear the line
+
+                # Print debug information
+                if debug:
+                    print(f"Motor temperature: {motor_temp}°C")
+                    print(f"Torque current: {torque_current}A")
+                    print(f"Motor speed: {motor_speed}dps")
+                    print(f"Motor angle: {motor_angle}°")
+
+                # Exit loop when motor reaches target position and speed is zero
+                if abs(initial_position + target_position - motor_angle) < 0.1 and motor_speed == 0.0:
+                    break
+
+        return motor_temp, torque_current, motor_speed, motor_angle
+
+
+    def read_running_mode(self, debug=None):
+        """
+        This command reads the current motor running mode.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x70)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x70)
+        - DATA[1-6]: NULL bytes
+        - DATA[7]: Motor running mode (uint8_t type)
+            - 0x00: Current loop mode
+            - 0x01: Speed loop mode
+            - 0x02: Position loop mode
+            - 0xFF: Power-on initialization state, not in three-ring mode
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - run_mode: Current motor running mode.
+        """
+
+        # Send command to read current motor running mode
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id,
+                                        data=[self.ADDR_READ_RUNNING_MODE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract motor running mode from the response
+        run_mode = msg.data[7]
+
+        # Print debug information if specified
+        if debug:
+            print(f"Motor running mode: {run_mode}")
+
+        return run_mode
+
+    def read_current_power_value(self, debug=None):
+        """
+        This command reads the current motor power.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x71)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x71)
+        - DATA[1-6]: NULL bytes
+        - DATA[7-8]: Motor running power (uint16_t type)
+            - Unit: watts
+            - Resolution: 0.1 watts/LSB
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - motor_power: Current motor power in watts (uint16_t type).
+        """
+
+        # Send command to read current motor power
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id,
+                                        data=[self.ADDR_READ_POWER_VALUE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract motor power from the response
+        motor_power = (msg.data[6] << 0) | (msg.data[7] << 8) * 0.1
+
+        # Print debug information if specified
+        if debug:
+            print(f"Motor running power: {motor_power} watts")
+
+        return motor_power
+
+    def read_battery_voltage_value(self, debug=None):
+        """
+        This command reads the current auxiliary battery voltage.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x72)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - DATA[0]: Command byte (0x72)
+        - DATA[1-6]: NULL bytes
+        - DATA[7]: High battery voltage (uint8_t type)
+            - Unit: volts
+            - Resolution: 0.1 volts/LSB
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - battery_voltage: Current auxiliary battery voltage in volts (uint8_t type).
+        """
+
+        # Send command to read current auxiliary battery voltage
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id,
+                                        data=[self.ADDR_READ_BATTERY_VOLTAGE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Extract battery voltage from the response
+        battery_voltage = msg.data[7] * 0.1
+
+        # Print debug information if specified
+        if debug:
+            print(f"Auxiliary battery voltage: {battery_voltage} volts")
+
+        return battery_voltage
+
+    def set_feedforward_setting(self, TF_current, encoder_position, debug=None):
+        """
+        This command sets the current feedforward current size and the encoder position.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x73)
+        - DATA[1]: NULL byte (0x00)
+        - DATA[2-3]: TF feedforward current value (int16_t type, unit A, zoomed in 100 times in current mode)
+        - DATA[4-7]: Encoder position (int32_t type)
+
+        Response Structure:
+        - DATA[0]: Torque current low byte
+        - DATA[1]: Torque current high byte
+        - DATA[2]: Motor speed low byte
+        - DATA[3]: Motor speed high byte
+        - DATA[4-7]: Encoder position (int32_t type)
+
+        Parameters:
+        - TF_current: TF feedforward current value of the motor (-327.68 to 327.67A).
+        - encoder_position: Encoder position multi-turn encoder (int32_t type).
+        - debug: Boolean flag indicating whether to print debug information.
+
+        Returns:
+        - torque_current: Motor torque current (int16_t type, zoomed in 100 times in current mode, such as 10 corresponds to 0.1A).
+        - motor_speed: Motor speed in degrees per second (int16_t type, 1dps/LSB).
+        - encoder_position: Encoder position multi-turn encoder (int32_t type).
+        """
+        TF_current = int(TF_current * 100)  # Convert TF_current to int16_t type
+        # Ensure TF_current is within the valid range [-32768, 32767]
+        if TF_current < -32768 or TF_current > 32767:
+            raise ValueError("Invalid TF feedforward current value. TF feedforward current must be in the range [-32768, 32767]")
+
+        # Ensure encoder_position is within the valid range [-2147483648, 2147483647]
+        if encoder_position < -2147483648 or encoder_position > 2147483647:
+            raise ValueError("Invalid encoder position value. Encoder position must be in the range [-2147483648, 2147483647]")
+
+        # Send command to set feedforward setting
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id,
+                                        data=[self.ADDR_FEEDFORWARD_SETTING, 
+                                                0x00, 
+                                                (TF_current >> 0) & 0xFF, 
+                                                (TF_current >> 8) & 0xFF,
+                                                (encoder_position >> 0) & 0xFF, 
+                                                (encoder_position >> 8) & 0xFF, 
+                                                (encoder_position >> 16) & 0xFF, 
+                                                (encoder_position >> 24) & 0xFF])
+
+        # Read response
+        torque_current = ((msg.data[0] << 0) | (msg.data[1] << 8)) / 100  # Correcting the scaling
+        motor_speed = (msg.data[2] << 0) | (msg.data[3] << 8)
+        encoder_position = (msg.data[4] << 0) | (msg.data[5] << 8) | (msg.data[6] << 16) | (msg.data[7] << 24)
+
+        # Print debug information if specified
+        if debug:
+            print(f"Torque current: {torque_current}A")
+            print(f"Motor speed: {motor_speed}dps")
+            print(f"Encoder position: {encoder_position}")
+
+        return torque_current, motor_speed, encoder_position
+
+    def system_reset(self, debug=None):
+        """
+        This command is used to reset the system software.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x76)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - Same as the command structure
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+        """
+        # Send command to reset the system software
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id,
+                                        data=[self.ADDR_SYSTEM_RESET, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Print debug information if specified
+        if debug:
+            print("System reset command sent.")
+
+    def open_system_brake(self, debug=None):
+        """
+        This command is used to open the system brake.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x77)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - Same as the command structure
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+        """
+        # Send command to open the system brake
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id,
+                                        data=[self.ADDR_BRAKE_OPENING, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Print debug information if specified
+        if debug:
+            print("System brake opening command sent.")
+
+    def close_system_brake(self, debug=None):
+        """
+        This command is used to close the system brake.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x78)
+        - DATA[1-7]: NULL bytes
+
+        Response Structure:
+        - Same as the command structure
+
+        Parameters:
+        - debug: Boolean flag indicating whether to print debug information.
+        """
+        # Send command to close the system brake
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id,
+                                        data=[self.ADDR_BRAKE_CLOSE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+        # Print debug information if specified
+        if debug:
+            print("System brake closing command sent.")
+
+    def set_or_read_CAN_ID(self, read_write_flag, CAN_ID, debug=None):
+        """
+        This command is used to set and read CAN ID.
+
+        Command Structure:
+        - DATA[0]: Command byte (0x79)
+        - DATA[1]: NULL byte (0x00)
+        - DATA[2]: Read and write flags (bool type, 1 for read, 0 for write)
+        - DATA[3]: NULL byte (0x00)
+        - DATA[4-7]: CAN ID (uint16_t type)
+
+        Response Structure:
+        - Same as the command structure
+
+        Parameters:
+        - read_write_flag: Read and write flags (bool type, 1 for read, 0 for write).
+        - CAN_ID: CAN ID to set or read (uint16_t type, range 1-32).
+        - debug: Boolean flag indicating whether to print debug information.
+        """
+        # Ensure CAN_ID is within the valid range [1, 32]
+        if CAN_ID < 1 or CAN_ID > 32:
+            raise ValueError("Invalid CAN ID value. CAN ID must be in the range [1, 32]")
+
+        # Send command to set or read CAN ID
+        msg = self.can_bus.sendMessage(id=self.BASE_ADDR_ID + self.id,
+                                        data=[self.ADDR_CAN_ID_SETTING_AND_READING, 
+                                                0x00, 
+                                                read_write_flag, 
+                                                0x00, 
+                                                (CAN_ID >> 0) & 0xFF, 
+                                                (CAN_ID >> 8) & 0xFF, 
+                                                0x00, 
+                                                0x00])
+
+        # Print debug information if specified
+        if debug:
+            if read_write_flag:
+                print(f"Reading CAN ID: {CAN_ID}")
+            else:
+                print(f"Setting CAN ID to: {CAN_ID}")
     
     def multiple_motor_torque_closed_loop(self,debug=None):
         """"
