@@ -35,11 +35,12 @@ When you successfully installed pybullet you can use the Simulation class as you
 You can check the pybullet's Github to learn more about the library : https://github.com/bulletphysics/bullet3?tab=readme-ov-file
 """
 import os
-import pybullet as p
-import pybullet_data
 import math
 import time
-from datetime import datetime
+
+os.system('pip3 install pybullet')
+import pybullet as p
+import pybullet_data
 
 
 class Simulation:
@@ -62,13 +63,14 @@ class Simulation:
         # Launch pybullet and import the simulation plane and the input urdf file
         self.physicsClient = p.connect(p.GUI)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setGravity(0, 0, -9.81)
+        #p.setGravity(0, 0, -9.81)
         self.planeId = p.loadURDF("plane.urdf", [0, 0, 0], useFixedBase=self.fixedBase)
-        self.robot_id = p.loadURDF(f"{urdf_file}", self.startPos, self.startOrientation)
+        self.robot_id = p.loadURDF(f"{urdf_file}", self.startPos, self.startOrientation, useFixedBase=self.fixedBase)
 
         # Run a specific simulation
         if (urdf_file=="r2d2.urdf"): self.r2d2_simulation()
         elif (urdf_file=="kuka_iiwa/model.urdf"): self.kuka_simulation()
+        else: self.dhm_simulation()
 
     def r2d2_simulation(self):
         """
@@ -100,6 +102,7 @@ class Simulation:
 
         for i in range(numJoints):
             p.resetJointState(self.robot_id, i, rp[i])
+            self.move_joint(abs(j-5),i*0.1)
 
         for j in range (5):
             for i in range (100):
@@ -108,6 +111,25 @@ class Simulation:
                 time.sleep(0.02)
 
             # ... Add something here to move the joints of the kuka robot
+                
+    def dhm_simulation(self):
+        p.resetBasePositionAndOrientation(self.robot_id, [0, 0, 0], [0, 0, 0, 1])
+
+        for i in range(p.getNumJoints(self.robot_id)):
+            print(p.getJointInfo(self.robot_id, i))
+
+        numJoints = int(((p.getNumJoints(self.robot_id))+1)/2)
+        print (numJoints)
+        rp = [0, 0, 0, 0.5 * math.pi, 0, -math.pi * 0.5 * 0.66, 0,0]
+        for i in range(numJoints):
+            p.resetJointState(self.robot_id, i, rp[i])
+
+        time.sleep(5)
+        while True:
+            p.stepSimulation()
+            self.move_joint(8,1) # 8 : Organe terminal
+
+            time.sleep(1./240)
 
     def close(self):
         """

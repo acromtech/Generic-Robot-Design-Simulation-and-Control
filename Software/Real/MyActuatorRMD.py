@@ -37,7 +37,7 @@ class MyActuatorRMD:
                 self.id = id
                 self.reducer_ratio = reducer_ratio
                 self.can_bus = can_bus
-                super().__init__(can_bus)
+                super().__init__(id, reducer_ratio, can_bus)
         class V3(ProtocolV3):
             """
             Class representing the RMD-X-V3 actuators.
@@ -54,7 +54,7 @@ class MyActuatorRMD:
                 self.id = id
                 self.reducer_ratio = reducer_ratio
                 self.can_bus = can_bus
-                super().__init__(can_bus)
+                super().__init__(id, reducer_ratio, can_bus)
     class L:
         """
         Class representing the RMD-L series.
