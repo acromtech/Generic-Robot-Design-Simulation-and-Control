@@ -1,0 +1,130 @@
+<robot name='robot'>
+    <material name='blue'>
+        <color rgba='0 0 0.8 1'/>
+    </material>
+    <material name='red'>
+        <color rgba='0.8 0 0 1'/>
+    </material>
+	<material name="black">
+        <color rgba="0.0 0.0 0.0 1.0"/>
+    </material>
+    <material name="white">
+        <color rgba="1.0 1.0 1.0 1.0"/>
+    </material>
+
+    <link name="world"/>
+    <link name='l0'>
+        <visual>
+            <origin rpy='0 0 0' xyz='0.0 0.0 0.0'/>
+            <geometry>
+                <cylinder length='0.0' radius='0.2'/>
+            </geometry>
+        </visual>
+        <visual>
+            <origin rpy= '0 0 0' xyz='0.0 0.0 0.0'/>
+            <geometry>
+                <sphere radius='0.4'/>
+            </geometry>
+            <material name='blue'/>
+        </visual>
+    </link>
+    <joint name='j0' type='revolute'>
+        <parent link='world'/>
+        <child link='l0'/>
+        <axis xyz='0.0 0.0 1.0'/>
+        <origin rpy= '0 0 0' xyz='0.0 0.0 0.0'/>
+        <limit lower="-1.0" upper="1.0" effort="1000.0" velocity="1000.0"/>
+    </joint>
+
+    <link name='l1'>
+        <visual>
+            <origin rpy='-0.0 0.0 0.0' xyz='0.0 0.0 1.0'/>
+            <geometry>
+                <cylinder length='2.0' radius='0.2'/>
+            </geometry>
+        </visual>
+        <visual>
+            <origin rpy='-0.0 0.0 0.0' xyz='0.0 0.0 1.0'/>
+            <geometry>
+                <sphere radius='0.4'/>
+            </geometry>
+            <material name='red'/>
+        </visual>
+    </link>
+    <joint name='j1' type='revolute'>
+        <parent link='l0'/>
+        <child link='l1'/>
+        <axis xyz='0.0 0.0 1.0'/>
+        <origin rpy= '0 0 0' xyz='0.0 0.0 0.0'/>
+        <limit lower="-1.0" upper="1.0" effort="1000.0" velocity="1000.0"/>
+    </joint>
+
+	<link name='l2'>
+		<visual>
+			<origin rpy='-0.0 1.5707963267948966 0.0' xyz='1.0 0.0 0.0'/>
+			<geometry>
+				<cylinder length='2.0' radius='0.2'/>
+			</geometry>
+		</visual>
+		<visual>
+            <origin rpy='-0.0 1.5707963267948966 0.0' xyz='1.0 0.0 0.0'/>
+            <geometry>
+                <sphere radius='0.4'/>
+            </geometry>
+			<material name='black'/>
+        </visual>
+	</link>
+	<joint name='j2' type='revolute'>
+		<parent link='l1'/>
+		<child link='l2'/>
+		<axis xyz='0.0 -1.0 6.123233995736766e-17'/>
+		<origin rpy= '0 0 0' xyz='0.0 0.0 2.0'/>
+		<limit lower="-1.0" upper="1.0" effort="1000.0" velocity="1000.0"/>
+	</joint>
+
+	<link name='l3'>
+		<visual>
+			<origin rpy='-0.0 1.5707963267948966 0.0' xyz='1.0 0.0 0.0'/>
+			<geometry>
+				<cylinder length='2.0' radius='0.2'/>
+			</geometry>
+		</visual>
+		<visual>
+            <origin rpy='-0.0 1.5707963267948966 0.0' xyz='1.0 0.0 0.0'/>
+            <geometry>
+                <sphere radius='0.4'/>
+            </geometry>
+			<material name='white'/>
+        </visual>
+	</link>
+	<joint name='j3' type='revolute'>
+		<parent link='l2'/>
+		<child link='l3'/>
+		<axis xyz='0.0 -1.0 6.123233995736766e-17'/>
+		<origin rpy= '0 0 0' xyz='2.0 0.0 0.0'/>
+		<limit lower="-1.0" upper="1.0" effort="1000.0" velocity="1000.0"/>
+	</joint>
+
+	<link name='l4'>
+		<visual>
+			<origin rpy='-0.0 1.5707963267948966 0.0' xyz='0.5 0.0 0.0'/>
+			<geometry>
+				<cylinder length='1.0' radius='0.2'/>
+			</geometry>
+		</visual>
+		<visual>
+            <origin rpy='-0.0 1.5707963267948966 0.0' xyz='0.5 0.0 0.0'/>
+            <geometry>
+                <sphere radius='0.4'/>
+            </geometry>
+			<material name='blue'/>
+        </visual>
+	</link>
+	<joint name='j4' type='revolute'>
+		<parent link='l3'/>
+		<child link='l4'/>
+		<axis xyz='0.0 -1.0 6.123233995736766e-17'/>
+		<origin rpy= '0 0 0' xyz='2.0 0.0 0.0'/>
+		<limit lower="-1.0" upper="1.0" effort="1000.0" velocity="1000.0"/>
+	</joint>
+</robot>
