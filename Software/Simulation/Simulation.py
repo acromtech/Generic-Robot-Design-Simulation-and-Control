@@ -230,7 +230,7 @@ class Simulation:
     
     # ------------ MOVE ROBOT JOINTS ------------
 
-    def move_joint(self, joint_index, displacement, max_speed=1, torque=1000., error=1E-5, wait_to_exit=False):
+    def move_joint(self, joint_index, displacement, max_speed=1, torque=1000., acceptable_error=1E-5, wait_to_exit=False, plot_joint_positions=False):
         """
         Move a joint of the robot to the target position.
 
@@ -251,11 +251,17 @@ class Simulation:
                                     maxVelocity         =max_speed,
                                     force               =torque)
             if wait_to_exit:
+                joint_traj = [[] for _ in range(1)]
+                start_time = time.time()
                 while True :
-                    if abs(self.get_joint_angle_current_position(joint_index) - displacement) < error: break
+                    joint_current_position = self.get_joint_angle_current_position(joint_index)
+                    current_time = time.time() - start_time
+                    joint_traj[0].append((joint_current_position, current_time))
+                    if abs(self.get_joint_angle_current_position(joint_index) - displacement) < acceptable_error: break
+                if plot_joint_positions: self.plot_joint_positions(joint_traj, [displacement])
 
 
-    def move_joints(self, joint_indices, displacements, max_speeds=None, torques=None, error=1E-5, wait_to_exit=False):
+    def move_joints(self, joint_indices, displacements, max_speeds=None, torques=None, acceptable_error=1E-5, wait_to_exit=False):
         """
         Move joints of the robot to the target positions.
 
@@ -276,7 +282,7 @@ class Simulation:
         if wait_to_exit:
             while True:
                 positions = [self.get_joint_angle_current_position(joint_index) for joint_index in joint_indices]
-                if all(abs(position - target) < error for position, target in zip(positions, displacements)):
+                if all(abs(position - target) < acceptable_error for position, target in zip(positions, displacements)):
                     break
     
     # ------------ MODEL CALCULATIONS ------------
@@ -391,35 +397,17 @@ class Simulation:
         if print_terminal: print(f"End effector frame:                         ",self.endEffector_frame)
 
     # ------------ GENERATE GRAPHS ------------
-
-    def update_plot_joint_positions(self):
-        q = self.get_joint_angle_current_positions()
-        self.timestep += 1
-        for i, joint_position in enumerate(q):
-            if i not in self.joint_lines:
-                self.joint_lines[i], = self.ax.plot([], [], label=f"Joint {i}")
-            self.joint_lines[i].set_data(range(self.timestep), joint_position)
-        self.ax.set_xlabel('Temps')
-        self.ax.set_ylabel('Position du joint')
-        self.ax.set_title('Positions des joints au fil du temps')
-        self.ax.legend()
-        self.fig.canvas.draw()
-        self.fig.canvas.flush_events()
-        
-
-    def update_plot_joint_speed(self):
-        pass
-
-    def update_plot_joint_torque(self):
-        pass
-
-    def plot_robot_position(self):
-        pass
     
-    def plot_robot_speed(self):
-        pass
-
-    def plot_robot_torque(self):
-        pass
-    
+    def plot_joint_positions(self, joint_traj, target_q):
+        plt.figure(figsize=(10, 6))
+        for i, traj in enumerate(joint_traj):
+            timestamps = [entry[1] for entry in traj]
+            positions = [entry[0] for entry in traj]
+            plt.plot(timestamps, positions, label=f"Joint {i}")
+            plt.plot([timestamps[0], timestamps[-1]], [target_q[i], target_q[i]], label=f"Target Position Joint {i}", linestyle='--', color=plt.gca().lines[-1].get_color())
+        plt.xlabel('Time (s)')
+        plt.ylabel('Joint Position')
+        plt.title('Joint Positions Over Time')
+        plt.legend()
+        plt.show()
     

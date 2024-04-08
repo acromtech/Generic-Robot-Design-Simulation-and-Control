@@ -1,5 +1,7 @@
 import time
 import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 from Tools.Tools import Tools
 from Simulation.Simulation import Simulation
@@ -85,17 +87,20 @@ class Robot:
         self.can_bus.setup()
 
     # Step 5.1 : Move the end effector in the R0 frame
-    def move_robot_position(self, X, Y, Z, end_effector_orientation, velocity_percentage, acceptable_error=1E-5, wait_to_exit=True):
+    def move_robot_position(self, X, Y, Z, end_effector_orientation, velocity_percentage, acceptable_error=1E-5, wait_to_exit=True, 
+                            plot_joint_positions=False, plot_robot_traj=False):
         
         joint_current_position = self.simulate.get_joint_angle_current_positions()
+        robot_initial_position = self.tools.forward_kinematics(joint_current_position)[0]
         print("joint initial positions                  ",joint_current_position) 
-        print("endEffector initial position             ",self.tools.forward_kinematics(joint_current_position))  
+        print("endEffector initial position             ",robot_initial_position)  
         print("target X,Y,Z                             ",X,Y,Z)
 
         # Computes models
         all_q = self.tools.inverse_kinematics([X,Y,Z,end_effector_orientation]) # Return multiples combinaison of q 
         print("target all_q (inverse kinematics)        ",all_q[0])  
-        print("endEffector target position real         ",self.tools.forward_kinematics(all_q[0]))
+        target_robot_position = self.tools.forward_kinematics(all_q[0])[0]
+        print("endEffector target position real         ",target_robot_position)
 
         v = [velocity_percentage * 32.46312405 / 100] * self.simulate.get_num_joint()
         all_qdot = self.tools.Indirect_differentiel_kinematics(v,all_q[0]) # We keep the first one
@@ -120,14 +125,25 @@ class Robot:
 
         # If you want, wait until you reach the target position
         if wait_to_exit:
+            joint_traj = [[] for _ in range(self.simulate.get_num_joint())]
+            robot_traj = {'x': [], 'y': [], 'z': [], 'time': []} # Store robot trajectory separately
             targets = all_q[0]
+            start_time = time.time()
             while True:
-                # self.simulate.update_plot_joint_positions()
-                positions = [self.simulate.get_joint_angle_current_position(joint_index) for joint_index in [0, 1, 2, 3]]
-                if all(abs(position - target) < acceptable_error for position, target in zip(positions, targets)):
+                joint_current_position = self.simulate.get_joint_angle_current_positions()
+                current_time = time.time() - start_time
+                for i, position in enumerate(joint_current_position):
+                    joint_traj[i].append((position, current_time))
+                robot_position = self.tools.forward_kinematics(joint_current_position)[0]
+                robot_traj['x'].append(robot_position[0])
+                robot_traj['y'].append(robot_position[1])
+                robot_traj['z'].append(robot_position[2])
+                robot_traj['time'].append(current_time)
+                if all(abs(position - target) < acceptable_error for position, target in zip(joint_current_position, targets)):
                     break
+            if plot_joint_positions: self.simulate.plot_joint_positions(joint_traj, all_q[0])
+            if plot_robot_traj: self.plot_robot_trajectory(robot_traj, robot_initial_position, target_robot_position)
         
-        joint_current_position = self.simulate.get_joint_angle_current_positions()
         print("joint final positions                    ",joint_current_position) 
         print("endEffector final position sim           ",self.tools.forward_kinematics(joint_current_position))  
         
@@ -141,7 +157,7 @@ class Robot:
     def move_robot_position_auto(self, X, Y, Z, max_speed, torque, acceptable_error=1E-5, wait_to_exit=True):
         
         print("joint initial positions                  ",self.simulate.get_joint_angle_current_positions()) 
-        print("endEffector initial position sim         ",self.simulate.get_robot_current_position()[2])  
+        print("endEffector initial position sim         ",self.simulate.get_robot_current_position()[2])
         print("target X,Y,Z (without offset)            ",X,Y,Z)
 
         # Apply offset to the target position
@@ -232,5 +248,17 @@ class Robot:
             print(f"robot_frame{i}_worldFramePosition     ",robot_data[2][i])
             print(f"robot_frame{i}_worldFrameOrientation  ",robot_data[3][i])
             print("")
-        
-    
+
+    def plot_robot_trajectory(self, robot_traj, initial_position, target_position):
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.plot(robot_traj['x'], robot_traj['y'], robot_traj['z'], label='Robot Trajectory')
+        ax.scatter(initial_position[0], initial_position[1], initial_position[2], color='g', label='Initial Position')
+        ax.scatter(target_position[0], target_position[1], target_position[2], color='r', label='Target Position')
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        ax.set_title('Robot Trajectory')
+        ax.legend()
+        plt.show()
+
