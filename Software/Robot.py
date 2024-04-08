@@ -97,7 +97,7 @@ class Robot:
         print("target all_q (inverse kinematics)        ",all_q[0])  
         print("endEffector target position real         ",self.tools.forward_kinematics(all_q[0]))
 
-        v = [velocity_percentage * 310 / 100] * self.simulate.get_num_joint()
+        v = [velocity_percentage * 32.46312405 / 100] * self.simulate.get_num_joint()
         all_qdot = self.tools.Indirect_differentiel_kinematics(v,all_q[0]) # We keep the first one
         print("target all_qdot (inverse diff kinematics)",all_qdot)
         print("endEffector target speed real            ",self.tools.Direct_differential_kinematics(all_qdot, all_q[0]))

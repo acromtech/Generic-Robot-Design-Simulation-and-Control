@@ -50,11 +50,11 @@ X, Y, Z = 0, 1, 2
 
 robot = Robot(joint_distances=[0.2,0.15,0.127,0.111]) # [l1,l2,L1,L4]
 robot.launch_URDF_simulation("./scara2/urdf/scara2.urdf", startPos=[0,0,0], fixedBase=True)
-robot.move_robot_position(  X=0.2,    Y=0.2,  Z=0.2,  end_effector_orientation=1, velocity_percentage=0.1,  acceptable_error=1E-5,   wait_to_exit=True)
-robot.move_robot_position(  X=0.2,    Y=-0.1, Z=0.1,  end_effector_orientation=0, velocity_percentage=0.1,  acceptable_error=1E-5,   wait_to_exit=True)
-robot.move_robot_position(  X=-0.2,   Y=-0.2, Z=0.22, end_effector_orientation=0, velocity_percentage=0.1,  acceptable_error=1E-5,   wait_to_exit=True)
-robot.move_robot_position(  X=-0.1,   Y=0.3,  Z=0.18, end_effector_orientation=0, velocity_percentage=0.1,  acceptable_error=1E-5,   wait_to_exit=True)
-robot.move_robot_position(  X=0.0,    Y=0.35, Z=0.18, end_effector_orientation=0, velocity_percentage=0.1,  acceptable_error=1E-5,   wait_to_exit=True)
+robot.move_robot_position(  X=0.2,    Y=0.2,  Z=0.2,  end_effector_orientation=1, velocity_percentage=1,  acceptable_error=1E-5,   wait_to_exit=True)
+robot.move_robot_position(  X=0.2,    Y=-0.1, Z=0.1,  end_effector_orientation=0, velocity_percentage=1,  acceptable_error=1E-5,   wait_to_exit=True)
+robot.move_robot_position(  X=-0.2,   Y=-0.2, Z=0.22, end_effector_orientation=0, velocity_percentage=1,  acceptable_error=1E-5,   wait_to_exit=True)
+robot.move_robot_position(  X=-0.1,   Y=0.3,  Z=0.18, end_effector_orientation=0, velocity_percentage=1,  acceptable_error=1E-5,   wait_to_exit=True)
+robot.move_robot_position(  X=0.1,    Y=0.25, Z=0.18, end_effector_orientation=0, velocity_percentage=1,  acceptable_error=1E-5,   wait_to_exit=True)
 time.sleep(1)
 
 

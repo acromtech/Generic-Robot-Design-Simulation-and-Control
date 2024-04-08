@@ -657,7 +657,7 @@ class Tools:
 
         return np.array(q)
         
-    def jac_analytique(self, qdeg) :
+    def jac_analytique(self, q) :
         """
         Compute the analytique Jacobian matrix for the robot given its configurations.
 
@@ -669,10 +669,6 @@ class Tools:
             j : numpy.ndarray
                 analytique Jacobian matrix. 
         """
-        q = qdeg.copy()
-        q[0] = np.deg2rad(q[0]) 
-        q[2] = np.deg2rad(q[2])  
-        q[3] = np.deg2rad(q[3])  
         q1,q2,q3,q4 = q
         
         l1 = self.joint_distances[0]
@@ -691,7 +687,7 @@ class Tools:
                     ])
         return Ja
     
-    def jac_geo(self, qdeg) :
+    def jac_geo(self, q) :
         """
         Compute the geometrique Jacobian matrix for the robot given its configurations.
 
@@ -703,10 +699,6 @@ class Tools:
             j : numpy.ndarray
                 geometrique Jacobian matrix. 
         """
-        q = qdeg.copy()
-        q[0] = np.deg2rad(q[0]) 
-        q[2] = np.deg2rad(q[2])  
-        q[3] = np.deg2rad(q[3])  
         q1,q2,q3,q4 = q
 
         l1 = self.joint_distances[0]
@@ -718,9 +710,11 @@ class Tools:
         s4=np.sin(q4)
         c3= np.cos(q3)
         s3=np.sin(q3)
+        c13 = np.cos(q1+q2)
+        s13 = np.sin(q1+q2)
 
-        J=np.array([[-l1*s1-l2*(c3*s1+s3*c1) ,       0      ,       -l2*(c3*s1+s3*c1) ,       0     ], 
-                    [l1*c1+l2*(c3*c1-s3*s1) ,       0      ,        l2*(c3*c1+s3*s1) ,       0     ], 
+        J=np.array([[-l1*s1-l2*c13          ,       0      ,       -l2*s13           ,       0     ], 
+                    [l1*c1+l2*c13           ,       0      ,        l2*c13           ,       0     ], 
                     [          0            ,       1      ,               0         ,       0     ],
                     [          1            ,       0      ,               1         ,       1     ]
                     ])
