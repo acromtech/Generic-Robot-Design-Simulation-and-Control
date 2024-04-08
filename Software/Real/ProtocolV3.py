@@ -1,6 +1,6 @@
 import sys
 import time
-from CanBusGsUsb import CanBusGsUsb
+from Real.CanBusGsUsb import CanBusGsUsb
 
 class ProtocolV3(CanBusGsUsb):
     # Attributes

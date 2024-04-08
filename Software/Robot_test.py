@@ -1,27 +1,86 @@
-import numpy
+import numpy as np
 import time
 from Robot import Robot
 
-# USE CASE : Robotic_Design
-# ============================================================
-robot_3DoF = Robot (joint_type              =[1,1,1],       # Optionnal (potentially for Etienne-Dombre Modelisation) -> for generic use cases
-                    joint_distance          =[10,20,15],    
-                    joint_orientation       =[0,0,1],       # Optionnal (potentially for Etienne-Dombre Modelisation) -> for generic use cases
-                    q_config                =[0,0,0],
-                    test_type               ="Robotic_Design"
-                    )
-#To call a specific method -> robot_3DoF.tools.method()
+PRISMATIC = 1
+REVOLUTE = 0
+X, Y, Z = 0, 1, 2
 
-# USE CASE : Simulation
-# ============================================================
-robot_URDF = Robot (URDF_file               ="kuka_iiwa/model.urdf",
-                    test_type               ="Simulation"
-                    )
-# To call a specific method -> robot_URDF.simulate.method()
+# ----------- USE A PYBULLET ROBOT (SIMULATION) ----------- 
 
-# USE CASE : Real -> Use only if you have the USB-CAN Transceiver plugged
+# robot = Robot ()
+# robot.launch_URDF_simulation("kuka_iiwa/model.urdf", startPos=[0,0,0], fixedBase=True)
+# robot.simulate.view_mode()
+
+
+# ----------- DESIGN YOUR OWN ROBOT THANKS TO DHM PARAMETERS (SIMULATION) ----------- 
+
+# EXAMPLE : 4R ROBOT
+# robot = Robot (joint_types  =[REVOLUTE, REVOLUTE, REVOLUTE, REVOLUTE],
+#                 a           =[0,        2,        1.5,      1],
+#                 alpha       =[np.pi/2,  0,        0,        0],
+#                 d           =[0.4,      0,        0,        0],
+#                 theta       =[np.pi/2,  0,        0,        0])
+# robot.create_simplified_URDF_based_on_DHM_parameters()
+# robot.launch_URDF_simulation("outfile.urdf", startPos=[0,0,0], fixedBase=True)
+# robot.simulate.view_mode()
+
+
+# ----------- VERIFY YOUR MODELISATION (SIMULATION) ----------- 
+
+# robot = Robot()
+# robot.launch_URDF_simulation("./scara2/urdf/scara2.urdf", startPos=[0,0,0], fixedBase=True)
+# robot.simulate.set_endEffector_frame_offset(0.0,0.0,-0.111)
+# robot.simulate.view_all_joint_frames()
+# robot.simulate.view_all_link_frames()
+# robot.simulate.view_endEffector_frame()
+# robot.simulate.view_mode()
+
+
+# ----------- POSITION JOINT CONTROL (SIMULATION) ----------- 
+
+# robot = Robot(joint_distances=[0.2,0.15,0.127,0.111]) # [l1,l2,L1,L4]
+# robot.launch_URDF_simulation("./scara2/urdf/scara2.urdf", startPos=[0,0,0], fixedBase=True)
+# robot.simulate.move_joint(joint_index=1, displacement=0.25555,  max_speed=0.2, torque=100, wait_to_exit=True)
+# robot.simulate.move_joint(joint_index=1, displacement=0,        max_speed=0.2, torque=100, wait_to_exit=True)
+# time.sleep(1)
+
+
+# ----------- POSITION ROBOT CONTROL (SIMULATION) USING YOUR MODELISATION ----------- 
+
+robot = Robot(joint_distances=[0.2,0.15,0.127,0.111]) # [l1,l2,L1,L4]
+robot.launch_URDF_simulation("./scara2/urdf/scara2.urdf", startPos=[0,0,0], fixedBase=True)
+robot.move_robot_position(  X=0.2,    Y=0.2,  Z=0.2,  end_effector_orientation=1, velocity_percentage=0.1,  acceptable_error=1E-5,   wait_to_exit=True)
+robot.move_robot_position(  X=0.2,    Y=-0.1, Z=0.1,  end_effector_orientation=0, velocity_percentage=0.1,  acceptable_error=1E-5,   wait_to_exit=True)
+robot.move_robot_position(  X=-0.2,   Y=-0.2, Z=0.22, end_effector_orientation=0, velocity_percentage=0.1,  acceptable_error=1E-5,   wait_to_exit=True)
+robot.move_robot_position(  X=-0.1,   Y=0.3,  Z=0.18, end_effector_orientation=0, velocity_percentage=0.1,  acceptable_error=1E-5,   wait_to_exit=True)
+robot.move_robot_position(  X=0.0,    Y=0.35, Z=0.18, end_effector_orientation=0, velocity_percentage=0.1,  acceptable_error=1E-5,   wait_to_exit=True)
+time.sleep(1)
+
+
+# ----------- POSITION ROBOT CONTROL (SIMULATION) AUTOMATIC MODELISATION ----------- 
+
+# robot = Robot()
+# robot.launch_URDF_simulation("./scara2/urdf/scara2.urdf", startPos=[0,0,0], fixedBase=True)
+# robot.simulate.set_endEffector_frame_offset(0.0,0.0,-0.111)
+# robot.simulate.view_endEffector_frame()
+# robot.move_robot_position_auto(0.1,0.1,0.2,0,1)
+# time.sleep(1)
+
+
+# ----------- TRAJECTORY ROBOT CONTROL (SIMULATION) ----------- 
+
+# ATTENTION CORRIGER LE FICHIER ! DEMANDER A AXEL DE REGENERER UNE TRAJ AVEC LE NOUVEAU MODELE
+# robot = Robot()
+# robot.launch_URDF_simulation("./scara/urdf/scara.urdf", startPos=[0,0,0], fixedBase=True)
+# robot.move_robot_moveit_trajectory("./Tools/trajectory.txt")
+# time.sleep(2)
+
+
+# ----------- REAL ROBOT CONTROL ----------- 
+# Use only if you have the USB-CAN Transceiver plugged
 # CURRENTLY THIS PART ISN'T READY TO USE
-# ============================================================
+
 # can_bus=CanBusGsUsb(0,1000000)
 # can_bus.setup()
 
@@ -32,5 +91,4 @@ robot_URDF = Robot (URDF_file               ="kuka_iiwa/model.urdf",
 # robot_3DoF = Robot (joints                  =[j1,j2,j3],
 #                     q_config                =[0,0,0], 
 #                     mechanical_features     =[10,20,15],  
-#                     test_type               ="Real", 
-#                     )
+#                     test_type               ="Real")

@@ -1,4 +1,4 @@
-from CanBusGsUsb import CanBusGsUsb
+from Real.CanBusGsUsb import CanBusGsUsb
 import sys
 class ProtocolV2(CanBusGsUsb):
     # Attributes

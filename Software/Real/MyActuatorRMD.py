@@ -37,12 +37,15 @@ class MyActuatorRMD:
                 self.id = id
                 self.reducer_ratio = reducer_ratio
                 self.can_bus = can_bus
+                
                 super().__init__(id, reducer_ratio, can_bus)
         class V3(ProtocolV3):
             """
             Class representing the RMD-X-V3 actuators.
             """
-            def __init__(self, id: int, reducer_ratio: int, can_bus):
+            def __init__(self, id=None, reducer_ratio=None, 
+                         peak_torque=None, rated_speed=None,
+                         can_bus=None):
                 """
                 Initialize the RMD-X-V3 actuator with the given parameters.
 
@@ -53,8 +56,13 @@ class MyActuatorRMD:
                 """
                 self.id = id
                 self.reducer_ratio = reducer_ratio
+                self.peak_torque = peak_torque
+                self.rated_speed = rated_speed 
                 self.can_bus = can_bus
                 super().__init__(id, reducer_ratio, can_bus)
+            
+            def get_rated_speed(self):
+                return self.rated_speed
     class L:
         """
         Class representing the RMD-L series.

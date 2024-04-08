@@ -14,17 +14,16 @@ Please ensure that these dependencies are installed before using the functionali
 You can learn more about Khalil-Dombre_Modelisation : https://www.gdr-robotique.org/cours_de_robotique/online/Khalil-Dombre_Modelisation/Khalil-Dombre_Modelisation.pdf
 You can check also the pinochio python library : https://github.com/stack-of-tasks/pinocchio/tree/master/examples
 """
-
+import re
+import time
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+
+PRISMATIC = 1
+REVOLUTE = 0
+X, Y, Z = 0, 1, 2
 
 class Tools:
-    
-    # DHM PARAMETERS
-    a = []      # List of a_{i-1} DHM parameter         -> dist(O_{i-1},O_i) suivant l'axe X_{i-1}  - ex : [a0,a1,a2,...] 
-    alpha = []  # List of alpha_{i-1} DHM parameter     -> ang(Z_{i-1},Zi) selon l'axe X_{i-1}      - ex : [alpha0,alpha1,alpha2,...]
-    r = []      # List of r_i DHM parameter             -> dist(O_{i-1},Oi) suivant l'axe Z_{i-1}   - ex : [r1,r2,r3,...]
 
     # TRAJECTORY PARAMETERS
     A = [0.,0.,0.]          # Starting position of the trajectory [xA, yA, zA] (list[float])
@@ -40,37 +39,38 @@ class Tools:
     z = []                  # Evolution of z coordinate (list[float])
     endEffector_speed = []  # End effector speed profile (list[float])
 
-
-    def __init__(self, joint_types=[], joint_distances=[], joint_orientations=[], q_config=[]):
+    def __init__(self, 
+                 joint_types=[], joint_distances=[], joint_orientations=[], 
+                 alpha=[], d=[], theta=[], a=[]):
         """
         Initialize the Tools class.
 
         Parameters:
-            joint_types : list[int], optional
-                List of joint types (0=Prismatic, 1=Revolute). Defaults to an empty list.
-            joint_distances : list[float], NOT optional
-                List of distances between each joints (in mm). Defaults to an empty list.
-            joint_orientations : list[int], optional
-                List of orientations of each joints (0=X, 1=Y, 2=Z). Defaults to an empty list.
-            q_config : list[float], NOT optional
-                List of configurations of q. Defaults to an empty list.
+            joint_types         list[int]      List of joint types (1=Prismatic, 0=Revolute).       Defaults to an empty list.
+            joint_distances     list[float]    List of distances between each joints (in m).        Defaults to an empty list.
+            joint_orientations  list[int]      List of orientations of each joints (0=X, 1=Y, 2=Z). Defaults to an empty list.
+
+            alpha               list[float]     List of alphaj DHM parameter     -> ang(zj-1,zj) autour de xj-1      - ex : [alpha1,alpha2,alpha3,...]
+            d                   list[float]     List of dj DHM parameter         -> dist(zj-1,zj) le long de xj-1    - ex : [a1,a2,a3,...]
+            theta               list[float]     List of thetaj DHM parameter     -> ang(xj-1,xj) autour de zj        - ex : [theta1,theta2,theta3,...]
+            r                   list[float]     List of rj DHM parameter         -> dist(xj-1,xj) le long de zj      - ex : [a1,a2,a3,...]
 
         Initializes the joint types, joint distances, joint orientations, and q configurations 
         based on the provided parameters. Additionally, calculates the DHM parameters based on 
         the initialized joint types, joint distances, and joint orientations.
         """
-        # Initialize DHM parameters with default values
-        num_joints = len(q_config)
-        self.a = [0] * num_joints
-        self.alpha = [0] * num_joints
-        self.r = [0] * num_joints
-
         self.joint_types = joint_types
         self.joint_distances = joint_distances
         self.joint_orientations = joint_orientations
-        self.q_config = q_config
-        if joint_types is not None : self.calculate_DHM_parameters()
 
+        self.num_joints = len(joint_types)
+        if d is None and alpha is None and a is None and theta is None : 
+            self.calculate_DHM_parameters()
+        else:
+            self.d = d
+            self.alpha = alpha
+            self.a = a
+            self.theta = theta
 
     # DHM PARAMETERS ================================================================================================================
     def calculate_DHM_parameters(self):
@@ -78,21 +78,19 @@ class Tools:
         Calculate DHM parameters for each joints of the robot features
 
         Parameters :
-            joint_types          :list[int]              # List of joint type (0=Prismatic, 1=Revolute)                      - ex : Robot RPPR -> [1,0,0,1]
-            joint_distances      :list[float]            # List of contants - distance beetween each joints (in mm)          - ex : [o0o1,o1o2,o2o3,...]
+            joint_types          :list[int]              # List of joint type (1=Prismatic, 0=Revolute)                      - ex : Robot RPPR -> [0,1,1,0]
+            joint_distances      :list[float]            # List of contants - distance beetween each joints (in m)           - ex : [o0o1,o1o2,o2o3,...]
             joint_orientations   :list[int]              # List of contants - orientation of each joints (0=X, 1=Y, 2=Z)     - ex : [0,0,1,...]
 
         Return :
-            a                   :list[float]            # List of a_{i-1} DHM parameter         -> dist(O_{i-1},O_i) suivant l'axe X_{i-1}  - ex : [a0,a1,a2,...] 
-            alpha               :list[float]            # List of alpha_{i-1} DHM parameter     -> ang(Z_{i-1},Zi) selon l'axe X_{i-1}      - ex : [alpha0,alpha1,alpha2,...]
-            r                   :list[float]            # List of r_i DHM parameter             -> dist(O_{i-1},Oi) suivant l'axe Z_{i-1}   - ex : [r1,r2,r3,...]
+            alpha = []  # List of alphaj DHM parameter     -> ang(zj-1,zj) autour de xj-1      - ex : [alpha1,alpha2,alpha3,...]
+            d = []      # List of dj DHM parameter         -> dist(zj-1,zj) le long de xj-1    - ex : [d1,d2,d3,...]
+            theta = []  # List of thetaj DHM parameter     -> ang(xj-1,xj) autour de zj        - ex : [theta1,theta2,theta3,...]
+            a = []      # List of aj DHM parameter         -> dist(xj-1,xj) le long de zj      - ex : [a1,a2,a3,...]
         """
-        # CODE AN ALGORITH TO SET DHM PARAMETERS AUTOMATICLY FOR GENERIC USE-CASES
-        # self.a = 
-        # self.alpha = 
-        # self.r =
+        
     
-    def set_DHM_parameters(self, a=None, alpha=None, r=None):
+    def set_DHM_parameters(self, a=None, alpha=None, d=None, theta=None):
         """
         Set DHM parameters for each joint of the robot features.
         Each parameter is optional
@@ -126,12 +124,19 @@ class Tools:
                 if alpha[i] is not None:
                     self.alpha[i] = alpha[i]
 
-        if r is not None:
-            if len(r) != len(self.joint_distances):
-                raise ValueError("Length of parameter 'r' does not match the current number of joints")
-            for i in range(len(r)):
-                if r[i] is not None:
-                    self.r[i] = r[i]
+        if d is not None:
+            if len(d) != len(self.joint_distances):
+                raise ValueError("Length of parameter 'd' does not match the current number of joints")
+            for i in range(len(d)):
+                if d[i] is not None:
+                    self.d[i] = d[i]
+
+        if theta is not None:
+            if len(theta) != len(self.joint_distances):
+                raise ValueError("Length of parameter 'theta' does not match the current number of joints")
+            for i in range(len(theta)):
+                if theta[i] is not None:
+                    self.theta[i] = theta[i]
 
     def get_DHM_parameters(self, parameter=None):
         """
@@ -148,15 +153,17 @@ class Tools:
             If parameter is None:
                 A dictionary containing all DHM parameters:
                 {
-                    'a': self.a,
+                    'd': self.d,
                     'alpha': self.alpha,
                     'r': self.r
+                    'theta' : self.theta
                 }
         """
         parameters = {
-            'a': self.a,
+            'd': self.d,
             'alpha': self.alpha,
-            'r': self.r
+            'a': self.a,
+            'theta' : self.theta
         }
 
         if parameter is not None:
@@ -167,7 +174,7 @@ class Tools:
             return parameters
 
     # JOINT PARAMETERS ================================================================================================================
-    def set_joint_parameters(self, joint_types=None, joint_distances=None, joint_orientations=None, q_config=None):
+    def set_joint_parameters(self, joint_types=None, joint_distances=None, joint_orientations=None):
         """
         Set joint parameters of the robot 
         Each parameter is optional
@@ -200,11 +207,6 @@ class Tools:
                 if joint_orientations[i] is not None:
                     self.joint_orientations[i] = joint_orientations[i]
 
-        if q_config is not None:
-            for i in range(len(q_config)):
-                if q_config[i] is not None:
-                    self.q_config[i] = q_config[i]
-
     def get_joint_parameters(self, parameters=None):
         """
         Get joint parameters of the robot.
@@ -225,7 +227,6 @@ class Tools:
             'joint_types': self.joint_types,
             'joint_distances': self.joint_distances,
             'joint_orientations': self.joint_orientations,
-            'q_config': self.q_config
         }
 
         if parameters is None:
@@ -553,21 +554,49 @@ class Tools:
                 Z-coordinate of the end-effector position.
         """
 
-        # ========================
-        # Robotic Design TP Code :
-        # =========================
-        # for i in range(3):
-        #     T = np.array([[np.cos(q[i]), -np.sin(q[i]), 0, self.a[i]],
-        #                   [np.cos(self.alpha[i]) * np.sin(q[i]), np.cos(self.alpha[i]) * np.cos(q[i]), -np.sin(self.alpha[i]), -self.r[i] * np.sin(self.alpha[i])],
-        #                   [np.sin(self.alpha[i]) * np.sin(q[i]), np.sin(self.alpha[i]) * np.cos(q[i]), np.cos(self.alpha[i]), self.r[i] * np.cos(self.alpha[i])],
-        #                   [0, 0, 0, 1]])
-        #     T0N = T0N @ T if i != 0 else T
-        # T0E = T0N @ np.array([[1, 0, 0, self.la], [0, 1, 0, 0], [0, 0, 1, self.lb], [0, 0, 0, 1]])
-        # X, Y, Z = T0E[:3, 3]
-        # phi,nu,psi = [np.arctan2(-T0E[1, 2], T0E[2, 2])**(2), np.arcsin(T0E[0, 2]), np.arctan2(T0E[0, 1], T0E[0, 0])]
-        # return X, Y, Z
+        q1,q2,q3,q4 = q
 
-    def inverse_kinematics(self, X, Y, Z):
+        #Definition des longueurs
+        l1 = self.joint_distances[0]
+        l2 = self.joint_distances[1]
+        L1 = self.joint_distances[2]
+        L4 = self.joint_distances[3]
+
+        c1 = np.cos(q1)
+        s1 = np.sin(q1)
+        c4 = np.cos(q4)
+        s4 = np.sin(q4)
+        c3 = np.cos(q3)
+        s3 = np.sin(q3)
+
+        T04 = np.array([[c4*(c1*c3 - s1*s3) + s4*(-c1*s3 - c3*s1),        c4*(-c1*s3 - c3*s1) - s4*(c1*c3 - s1*s3),         0,            c1*l1 + l2*(c1*c3 - s1*s3)],
+            [c4*(c1*s3 + c3*s1) + s4*(c1*c3 - s1*s3),         c4*(c1*c3 - s1*s3) - s4*(c1*s3 + c3*s1),          0,            l1*s1 + l2*(c1*s3 + c3*s1)],
+            [              0,                                                   0,                              1,                      L1 + q2         ],
+            [              0,                                                   0,                              0,                        1             ]])
+        
+        R04 = T04[0:3,0:3]
+        P = T04[0:3,3]
+
+        P04 = np.array([[P[0]], [P[1]], [P[2]]])
+
+        #Ot dans le repère R4
+        Ot_R4 = [[0],[0],[-L4]]
+
+        # Ot dans le repère R0
+        Ot_R0 = np.dot(R04,Ot_R4)
+
+        #Position organe terminal
+        X = P04+Ot_R0
+        
+        #Angle organe terminal
+        theta_d = np.array([[q1+q3+q4]])
+        
+        #Position et orientation de l'organe terminal
+        Xd = np.vstack((X, theta_d )) 
+
+        return Xd.T
+
+    def inverse_kinematics(self, Xbut):
         """
         Perform the inverse kinematics (Geometric Inverse Model) to compute joint configurations from the end-effector position.
 
@@ -583,45 +612,54 @@ class Tools:
             all_q : list[float]
                 List of joint configurations for all joints corresponding to the given end-effector position.
         """
+        # Lenght definition
+        l1 = self.joint_distances[0]
+        l2 = self.joint_distances[1]
+        L1 = self.joint_distances[2]
+        L4 = self.joint_distances[3]
 
-        # ========================
-        # Robotic Design TP Code :
-        # =========================
-        # z1 = []
-        # q1, q2, q3 = [], [], []
-        # all_q = []
+        x = Xbut[0]
+        y = Xbut[1]
+        z = Xbut[2]
+        theta_but = Xbut[3]
 
-        # z1.append(np.sqrt(X**(2) + Y**(2) - ((self.lb - self.o1o2)**(2))))
-        # z1.append(-np.sqrt(X**(2) + Y**(2) - ((self.lb - self.o1o2)**(2))))
-        # z1.append(np.sqrt(X**(2) + Y**(2) - ((self.lb - self.o1o2)**(2))))
-        # z1.append(-np.sqrt(X**(2) + Y**(2) - ((self.lb - self.o1o2)**(2))))
-        # z2 = Z - self.o0o1
-        # c3 = (z1[0]**(2) + z2**(2) - self.o2o3**(2) - self.la**(2)) / (2 * self.o2o3 * self.la)
-        # q3.append(np.arctan2(np.sqrt(1 - c3**(2)), c3))
-        # q3.append(np.arctan2(np.sqrt(1 - c3**(2)), c3))
-        # q3.append(np.arctan2(-np.sqrt(1 - c3**(2)), c3))
-        # q3.append(np.arctan2(-np.sqrt(1 - c3**(2)), c3))
-
-        # for i in range (len(q3)):
-        #     b1=self.o2o3+self.la*np.cos(q3[i])
-        #     b2=self.la*np.sin(q3[i])
-
-        #     s2=(b1*z2-b2*z1[i])/(b1**(2)+b2**(2))
-        #     c2=(b1*z1[i]+b2*z2)/(b1**(2)+b2**(2))
-        #     q2.append(np.arctan2(s2,c2))
-
-        #     s1=(X*(-self.lb+self.o1o2)-Y*(self.la*np.cos(q2[i]+q3[i])+self.o2o3*np.cos(q2[i])))/((self.lb-self.o1o2)*(-self.lb+self.o1o2)-(self.la*np.cos(q2[i]+q3[i])+self.o2o3*np.cos(q2[i]))*(self.la*np.cos(q2[i]+q3[i])+self.o2o3*np.cos(q2[i])))
-        #     c1=(Y*(self.lb-self.o1o2)-X*(self.la*np.cos(q2[i]+q3[i])+self.o2o3*np.cos(q2[i])))/((self.lb-self.o1o2)*(-self.lb+self.o1o2)-(self.la*np.cos(q2[i]+q3[i])+self.o2o3*np.cos(q2[i]))*(self.la*np.cos(q2[i]+q3[i])+self.o2o3*np.cos(q2[i])))
-        #     q1.append(np.arctan2(s1,c1))
-
-        #     # print([q1[i],q2[i],q3[i]])
-        #     all_q.append([q1[i],q2[i],q3[i]])
+        q = []  # joint configuration
         
-        # return all_q
+        #Déduction q2 : Ligne 3, Colonne 3 MGD 
+        q2 = z-L1+L4
+        #q2 = -z+L1-L4
 
-    def jacobian(self,q):
+        #Déduction q3 et q1 : Ligne 2 et 1, Colonne 3 MGD 
+        
+            # Notations utilisées : formules générales du cours :
+            
+            #_________Déduction q3_________
+        
+        
+        Z1 = x 
+        Z2 = y 
+
+        signe_s3 = [-1,1] # possible signs of s3
+
+        for signe in signe_s3 : 
+            c3 = (Z1**2 + Z2**2 - l1**2 - l2**2 )/(2*l1*l2)
+            s3 = signe*np.sqrt(1-c3**2)
+            q3 = np.arctan2(s3, c3)
+            B1 = l1 + l2*c3
+            B2 = l2*s3
+            s1 = (B1*Z2-B2*Z1)/(B1**2+B2**2)
+            c1 = (B1*Z1+B2*Z2)/(B1**2+B2**2)
+            q1 = (np.arctan2(s1, c1)) 
+
+            q4 = theta_but-q1-q3
+
+            q.append((q1,q2,q3,q4))
+
+        return np.array(q)
+        
+    def jac_analytique(self, qdeg) :
         """
-        Compute the Jacobian matrix for the robot given its configurations.
+        Compute the analytique Jacobian matrix for the robot given its configurations.
 
         Parameters:
             q : list[float]
@@ -629,30 +667,130 @@ class Tools:
 
         Returns:
             j : numpy.ndarray
-                Jacobian matrix. 
+                analytique Jacobian matrix. 
         """
-        # ========================
-        # Robotic Design TP Code :
-        # =========================
-        # return np.array([   [-self.la*np.sin(q[0])*np.cos(q[1]+q[1])+self.lb*np.cos(q[0])-self.o1o2*np.cos(q[0])-self.o2o3*np.cos(q[1])*np.sin(q[0])    ,   -self.la*np.cos(q[0])*np.sin(q[1]+q[2])-self.o2o3*np.cos(q[0])*np.sin(q[1]) ,   -self.la*np.cos(q[0])*np.sin(q[1]+q[2])  ], 
-        #                 [ self.la*np.cos(q[0])*np.cos(q[1]+q[2])+(self.o0o1+self.o1o2-self.o2o3)*np.sin(q[0])-self.o2o3*np.cos(q[1])*np.cos(q[0])   ,   -self.la*np.sin(q[0])*np.sin(q[1]-q[2])-self.o2o3*np.sin(q[1])*np.sin(q[0]) ,   self.la*np.sin(q[0])*np.sin(q[1]-q[2])   ],
-        #                 [ 0                                                                                                                         ,   self.la*np.cos(q[1]+q[2])+self.o2o3*np.cos(q[1])                            ,   self.la*np.cos(q[2]+q[1])                ]])
+        q = qdeg.copy()
+        q[0] = np.deg2rad(q[0]) 
+        q[2] = np.deg2rad(q[2])  
+        q[3] = np.deg2rad(q[3])  
+        q1,q2,q3,q4 = q
         
-    def inverse_dynamics (self, q, dotX):
+        l1 = self.joint_distances[0]
+        l2= self.joint_distances[1]
+        
+        c1= np.cos(q1)
+        s1=np.sin(q1)
+        c4= np.cos(q4)
+        s4=np.sin(q4)
+        c3= np.cos(q3)
+        s3=np.sin(q3)
+        Ja=np.array([[-l1*s1-l2*(c3*s1+s3*c1),       0      ,       -l2*(c3*s1+s3*c1) ,       0     ], 
+                    [l1*c1+l2*(c3*c1-s3*s1) ,       0      ,        l2*(c3*c1+s3*s1) ,       0     ], 
+                    [          0            ,       1      ,               0         ,       0     ],
+                    [          1            ,       0      ,               1         ,       1     ]
+                    ])
+        return Ja
+    
+    def jac_geo(self, qdeg) :
         """
-        Perform the model-based inverse dynamics computation.
+        Compute the geometrique Jacobian matrix for the robot given its configurations.
 
         Parameters:
             q : list[float]
                 Robot configurations.
-            dotX : numpy.ndarray
-                Transpose of the velocity vector.
 
         Returns:
-            qdot : numpy.ndarray
-                Inverse of the Jacobian multiplied by the transpose of the velocity vector.
+            j : numpy.ndarray
+                geometrique Jacobian matrix. 
         """
-        # ========================
-        # Robotic Design TP Code :
-        # =========================
-        # return np.dot(np.linalg.inv(self.jacobian(q)),np.transpose(dotX))
+        q = qdeg.copy()
+        q[0] = np.deg2rad(q[0]) 
+        q[2] = np.deg2rad(q[2])  
+        q[3] = np.deg2rad(q[3])  
+        q1,q2,q3,q4 = q
+
+        l1 = self.joint_distances[0]
+        l2= self.joint_distances[1]
+        
+        c1= np.cos(q1)
+        s1=np.sin(q1)
+        c4= np.cos(q4)
+        s4=np.sin(q4)
+        c3= np.cos(q3)
+        s3=np.sin(q3)
+
+        J=np.array([[-l1*s1-l2*(c3*s1+s3*c1) ,       0      ,       -l2*(c3*s1+s3*c1) ,       0     ], 
+                    [l1*c1+l2*(c3*c1-s3*s1) ,       0      ,        l2*(c3*c1+s3*s1) ,       0     ], 
+                    [          0            ,       1      ,               0         ,       0     ],
+                    [          1            ,       0      ,               1         ,       1     ]
+                    ])
+        return J
+    
+    def Direct_differential_kinematics(self,qp,q) :
+        """
+        Compute the differential kinematics (Differential Direct Model) to find the end-effector velocity from joint velocities.
+
+        Parameters:
+            qp : list[float]
+                Joint velocities for all joints.
+            q : list[float]
+                Joint configurations for all joints.
+
+        Returns:
+            Xp : numpy.ndarray
+                End-effector velocity.
+        """
+        q1,q2,q3,q4= q
+        Ja = self.jac_analytique(q)
+        Xp = np.dot(Ja,qp)
+        return Xp
+    
+    def Indirect_differentiel_kinematics(self, Xp,q) :
+        """
+        Compute the joint velocities from end-effector velocity using the inverse differential kinematics.
+
+        Parameters:
+            Xp : numpy.ndarray
+                End-effector velocity.
+            q : list[float]
+                Joint configurations for all joints.
+
+        Returns:
+            qp : numpy.ndarray
+                Joint velocities for all joints.
+        """
+        q1,q2,q3,q4 = q
+        Ja_inv = np.linalg.inv(self.jac_analytique(q))
+        print("Jacc",Ja_inv)
+        qp = np.dot(Ja_inv,Xp)
+        return qp
+
+
+    def extract_trajectory(self, file_path):
+        with open(file_path, 'r') as file:
+            data = file.read()
+
+        matches = re.findall(r"positions: \[(.*?)\]\n\s+velocities: \[(.*?)\]\n\s+accelerations: \[(.*?)\]\n\s+effort: (.*?)\n\s+time_from_start:\s+\n\s+secs: (\d+)\n\s+nsecs:\s+(\d+)", data, re.DOTALL)
+
+        configurations = []
+        for match in matches:
+            positions = [float(x) for x in match[0].split(',')]
+            velocities = [float(x) for x in match[1].split(',')]
+            accelerations = [float(x) for x in match[2].split(',')]
+            effort = [] if match[3].strip() == "[]" else match[3].strip().split(',')
+            secs = int(match[4])
+            nsecs = int(match[5])
+
+            information = {
+                "positions": positions,
+                "velocities": velocities,
+                "accelerations": accelerations,
+                "effort": effort,
+                "time_from_start": {
+                    "secs": secs,
+                    "nsecs": nsecs
+                }
+            }
+            configurations.append(information)
+        return configurations
+

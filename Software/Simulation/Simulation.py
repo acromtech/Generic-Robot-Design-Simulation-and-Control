@@ -41,11 +41,12 @@ import time
 import pybullet as p
 import pybullet_data
 import numpy as np
+import matplotlib.pyplot as plt
 
 PRISMATIC = 1
 REVOLUTE = 0
 class Simulation:
-    def __init__(self, urdf_file=None, startPos=[0,0,1], startOrientation=p.getQuaternionFromEuler([0,0,0]),fixedBase=False, viewMode=False):
+    def __init__(self, urdf_file=None, startPos=[0,0,1], startOrientation=[0,0,0],fixedBase=False, viewMode=False):
         """
         Initialize the simulation with a URDF file.
 
@@ -58,24 +59,34 @@ class Simulation:
         # Initialize parameters
         self.urdf_file=urdf_file
         self.startPos=startPos
-        self.startOrientation=startOrientation
+        self.startOrientation=p.getQuaternionFromEuler(startOrientation)
         self.fixedBase=fixedBase
 
         # Launch pybullet and import the simulation plane and the input urdf file
         self.physicsClient = p.connect(p.GUI)
+        p.setRealTimeSimulation(1, self.physicsClient)
+        p.configureDebugVisualizer(p.COV_ENABLE_MOUSE_PICKING, 1)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
+        print(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.81)
         self.planeId = p.loadURDF("plane.urdf", [0, 0, 0], useFixedBase=self.fixedBase)
         self.robot_id = p.loadURDF(f"{urdf_file}", self.startPos, self.startOrientation, useFixedBase=self.fixedBase)
 
+        self.numJoint = p.getNumJoints(self.robot_id)
+        self.endEffectorIndex = self.numJoint-1
         self.jointName = []
         self.jointType = []
         self.jointLowerLimit = []
         self.jointUpperLimit = []
         self.jointMaxForce = []
         self.jointMaxVelocity = []
+        self.jointFramePosition = []
+        self.jointFrameOrientation = []
 
-        for i in range(p.getNumJoints(self.robot_id)):
+        self.endEffector_offset = [0.0, 0.0, 0.0]
+        self.endEffector_frame = self.get_robot_current_position()
+
+        for i in range(self.numJoint):
             self.joint_info = p.getJointInfo(self.robot_id, i)
             self.jointName.append(self.joint_info[1].decode('utf-8'))
             self.jointType.append(self.joint_info[2])
@@ -83,29 +94,41 @@ class Simulation:
             self.jointUpperLimit.append(self.joint_info[9])
             self.jointMaxForce.append(self.joint_info[10])
             self.jointMaxVelocity.append(self.joint_info[11])
-            
-        print("Names:       \t",self.jointName)
-        print("Types:       \t",self.jointType)
-        print("Lower Limits:\t",self.jointLowerLimit)
-        print("Upper Limits:\t",self.jointUpperLimit)
-        print("Max Force:   \t",self.jointLowerLimit)
-        print("Max Velocity:\t",self.jointUpperLimit)
+            self.jointFramePosition.append(self.joint_info[14])
+            self.jointFrameOrientation.append(self.joint_info[15])
+
+            print(f"Joint Frame{i} Position:    \t",self.jointFramePosition[i])
+            print(f"Joint Frame{i} Orientation: \t",self.jointFrameOrientation[i])
         
-        if viewMode or urdf_file=="r2d2.urdf" : self.view_mode()
-        elif (urdf_file=="kuka_iiwa/model.urdf"): self.kuka_simulation()
-        elif (urdf_file=="outfile.urdf"): self.joint_test_dhm()
-        elif (urdf_file=="./scara/urdf/scara.urdf"): self.joint_test()
-        else: self.view_mode()
+        print("NumJoint:                \t",self.numJoint)
+        print("EndEffectorIndex:        \t",self.endEffectorIndex)
+        print("Names:                   \t",self.jointName)
+        print("Types:                   \t",self.jointType)
+        print("Lower Limits:            \t",self.jointLowerLimit)
+        print("Upper Limits:            \t",self.jointUpperLimit)
+        print("Max Force:               \t",self.jointLowerLimit)
+        print("Max Velocity:            \t",self.jointUpperLimit)
+        print("Start Position:          \t",self.startPos)
+        print("Start Orientation:       \t",self.startOrientation)
+
+        # self.fig, self.ax = plt.subplots(figsize=(10, 6))
+        # self.joint_lines = {}  # Dictionnaire pour stocker les lignes des courbes de chaque joint
+        # self.timestep = 0
+        # self.fig.show()
+        
+        # if viewMode or urdf_file=="r2d2.urdf" : self.view_mode()
+        # elif (urdf_file=="kuka_iiwa/model.urdf"): self.kuka_simulation()
+        # elif (urdf_file=="outfile.urdf"): self.joint_test_dhm()
+        # elif (urdf_file=="./scara/urdf/scara.urdf"): self.joint_test()
+        # else: self.view_mode()
 
     def view_mode(self):
-        while True:
-            p.stepSimulation()
-            time.sleep(1. / 240.)
+        print("------ Press ENTER to quit ------")
+        if input(): pass
 
     def kuka_simulation(self):
         p.resetBasePositionAndOrientation(self.robot_id, [0, 0, 0], [0, 0, 0, 1])
-        numJoints = p.getNumJoints(self.robot_id)
-        if (numJoints != 7):
+        if (self.numJoint != 7):
             exit()
 
         #lower limits for null space
@@ -119,121 +142,284 @@ class Simulation:
         #joint damping coefficents
         #jd = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
 
-        for i in range(numJoints):
+        for i in range(self.numJoint):
             p.resetJointState(self.robot_id, i, rp[i])
             self.move_joint(abs(j-5),i*0.1)
 
         for j in range (5):
             for i in range (100):
-                p.stepSimulation()
+                #p.stepSimulation()
                 self.move_joint(abs(j-5),i*0.1)
                 time.sleep(0.02)
         
         p.disconnect()
 
-            # ... Add something here to move the joints of the kuka robot 
+        # ... Add something here to move the joints of the kuka robot 
         
     def joint_test_dhm(self):
         move_joint_indices = []
-        for i in range(p.getNumJoints(self.robot_id)):
+        for i in range(self.numJoint):
             joint_info = p.getJointInfo(self.robot_id, i)
             joint_name = joint_info[1].decode('utf-8')
             if joint_name.startswith('move'):
                 move_joint_indices.append(i)
         print(move_joint_indices)
 
-        # Move all the joints
-        for joint_index in move_joint_indices:
-            print(f"test{joint_index}")
-            for i in range(100):
-                p.setJointMotorControl2(bodyUniqueId=self.robot_id,
-                                        jointIndex=joint_index,
-                                        controlMode=p.POSITION_CONTROL,
-                                        targetPosition=i*0.01)
-                p.stepSimulation()
-                time.sleep(1./240)
-            time.sleep(1)
-
-        # Deconnexion
-        p.disconnect()
+        self.joint_test()
+        self.view_mode()
 
 
     def joint_test(self):
-        p.stepSimulation()
 
         # Move all the joints
-        for joint_index in range(p.getNumJoints(self.robot_id)):
+        for joint_index in range(self.numJoint):
             print(p.getJointInfo(self.robot_id, joint_index))
             print(f"test{joint_index}")
 
             # Check if the joint has limits
             if self.jointLowerLimit[joint_index] == self.jointUpperLimit[joint_index]:
-                self.move_joint(joint_index, 360)
-                self.move_joint(joint_index, -360)
-                self.move_joint(joint_index, 0)
+                self.move_joint(joint_index     =joint_index, 
+                                displacement    =360, 
+                                max_speed       =1,
+                                torque          =10,
+                                wait_to_exit    =True)
+                time.sleep(1)
+                self.move_joint(joint_index     =joint_index, 
+                                displacement    =-360, 
+                                max_speed       =1,
+                                torque          =10,
+                                wait_to_exit    =True)
+                time.sleep(1)
+                self.move_joint(joint_index     =joint_index, 
+                                displacement    =0, 
+                                max_speed       =1,
+                                torque          =10,
+                                wait_to_exit    =True)
+                time.sleep(1)
             else:
-                self.move_joint(joint_index, self.jointLowerLimit[joint_index] * 180/np.pi)
-                self.move_joint(joint_index, self.jointUpperLimit[joint_index] * 180/np.pi)
+                self.move_joint(joint_index     =joint_index, 
+                                displacement    =self.jointLowerLimit[joint_index] * 180/np.pi, 
+                                max_speed       =10,
+                                torque          =1000,
+                                wait_to_exit    =True)
+                time.sleep(1)
+                self.move_joint(joint_index     =joint_index, 
+                                displacement    =self.jointUpperLimit[joint_index] * 180/np.pi, 
+                                max_speed       =10,
+                                torque          =1000,
+                                wait_to_exit    =True)
+                time.sleep(1)
 
-        p.disconnect()
+    def joints_test(self):
+        self.move_joints(joint_indices      =[0,1,3],
+                         displacements      =[90,0.10,360],
+                         max_speeds         =[1,1,1],
+                         torques            =[10,10,10],
+                         positionGains      =[0.5,0.5,0.5],
+                         velocityGains      =[0.255,0.255,0.255],
+                         wait_to_exit       =False)
+        time.sleep(10)
+        
+        self.move_joints(joint_indices      =[1,2],
+                         displacements      =[0.20,360],
+                         max_speeds         =[1,1],
+                         torques            =[10,10],
+                         positionGains      =[0.5,0.5],
+                         velocityGains      =[0.255,0.255],
+                         wait_to_exit       =False)
+    
+    # ------------ MOVE ROBOT JOINTS ------------
 
-
-    def move_joint(self, joint_index, displacement, speed=1.0):
+    def move_joint(self, joint_index, displacement, max_speed=1, torque=1000., error=1E-5, wait_to_exit=False):
         """
         Move a joint of the robot to the target position.
 
-        Parameters:xx
+        Parameters:
             joint_index (int): Index of the joint to move.
-            displacement (float) :  distance in meter if it's a PRISMATIC joint 
-                                    angle in degree if it's a REVOLUTE joint
-            speed (float, optional): Speed at which to move the joint. Default is 1.0.
+            displacement        (float)     distance in meter if it's a PRISMATIC joint 
+                                            angle in degree if it's a REVOLUTE joint
+            max_speed           (float)     Speed at which to move the joint.       Default is 1.
+            torque              (float)     Torque at which to move the joint.      Default is 10.
+            positionGain        (float)     kp position gain of the joint           Default is 0.5
+            velocityGain        (float)     kd velocity gain of the joint           Default is 0.225
         """
-        # Get current joint position
-        current_position = p.getJointState(self.robot_id, joint_index)[0]
+        if self.get_joint_angle_current_position(joint_index) != displacement:
+            p.setJointMotorControl2(bodyIndex           =self.robot_id,
+                                    jointIndex          =joint_index,
+                                    controlMode         =p.POSITION_CONTROL,
+                                    targetPosition      =displacement,
+                                    maxVelocity         =max_speed,
+                                    force               =torque)
+            if wait_to_exit:
+                while True :
+                    if abs(self.get_joint_angle_current_position(joint_index) - displacement) < error: break
 
-        if current_position != displacement:
-            if self.jointType[joint_index] == REVOLUTE:
-                angle_rad = displacement * np.pi / 180
-                num_steps = 100
-                for step in range(1, num_steps + 1):
-                    # Interpolate between current position and target position
-                    target_angle_rad = current_position + (angle_rad - current_position) * step / num_steps
-                    p.setJointMotorControl2(bodyUniqueId= self.robot_id,
-                                            jointIndex= joint_index,
-                                            controlMode= p.POSITION_CONTROL,
-                                            targetPosition= target_angle_rad,
-                                            targetVelocity= speed)
-                    p.stepSimulation()
-                    time.sleep(1. / 240)
-            elif self.jointType[joint_index] == PRISMATIC:
-                num_steps = 100
-                for step in range(1, num_steps + 1):
-                    # Interpolate between current position and target position
-                    target_position = current_position + (displacement - current_position) * step / num_steps
-                    p.setJointMotorControl2(bodyUniqueId= self.robot_id,
-                                            jointIndex= joint_index,
-                                            controlMode= p.POSITION_CONTROL,
-                                            targetPosition= target_position,
-                                            targetVelocity= speed)
-                    p.stepSimulation()
-                    time.sleep(1. / 240)
 
-    def move_joints(self, joint_indices, target_positions):
+    def move_joints(self, joint_indices, displacements, max_speeds=None, torques=None, error=1E-5, wait_to_exit=False):
         """
-        Move multiple joints of the robot to the target positions.
+        Move joints of the robot to the target positions.
 
         Parameters:
-            joint_indices (list[int]): Indices of the joints to move.
-            target_positions (list[float]): Target positions for each joint.
+            joint_indices (list of int): Indices of the joints to move.
+            displacements (list of float): Distances in meters if they are PRISMATIC joints, or angles in degrees if they are REVOLUTE joints.
+            max_speeds (list of float): Speeds at which to move the joints. Default is [1.].
+            torques (list of float): Torques at which to move the joints. Default is [10.].
+            positionGains (list of float): kp position gains of the joints. Default is [0.5].
+            velocityGains (list of float): kd velocity gains of the joints. Default is [0.225].
+            wait_to_exit (bool): Whether to wait for the joints to reach their target positions before returning. Default is False.
         """
-        control_modes = [p.POSITION_CONTROL] * len(joint_indices)
-        forces = [500] * len(joint_indices)
-        p.setJointMotorControlArray(bodyUniqueId=self.robot_id,
-                                    jointIndices=joint_indices,
-                                    controlMode=control_modes,
-                                    targetPositions=target_positions,
-                                    forces=forces)
+        if max_speeds==None: max_speeds=[1]*self.get_num_joint()
+        if torques==None: torques=[100]*self.get_num_joint()
 
-        
+        p.setJointMotorControlArray(self.robot_id,joint_indices,p.POSITION_CONTROL,displacements,max_speeds,torques)
+
+        if wait_to_exit:
+            while True:
+                positions = [self.get_joint_angle_current_position(joint_index) for joint_index in joint_indices]
+                if all(abs(position - target) < error for position, target in zip(positions, displacements)):
+                    break
     
-    # ... Add methods if you need it
+    # ------------ MODEL CALCULATIONS ------------
+    
+    def calculate_inverse_dynamics(self, jointPositions=[], jointVelocities=[], jointAccelerations=[]):
+        return p.calculateInverseDynamics(bodyUniqueId          =self.robot_id,
+                                            objPositions        =jointPositions,
+                                            objVelocities       =jointVelocities,
+                                            objAccelerations    =jointAccelerations,
+                                            physicsClientId     =self.physicsClient)
+    
+    def calculate_inverse_kinematics(self, targetPosition):
+        return p.calculateInverseKinematics(bodyUniqueId           =self.robot_id,
+                                            endEffectorLinkIndex   =self.endEffectorIndex,
+                                            targetPosition         =targetPosition)
+    
+    # ------------ GET JOINTS INFO ------------
+
+    def get_num_joint(self):
+        return self.numJoint
+    
+    def get_type_joint(self, indice):
+        return self.jointType[indice]
+    
+    def get_joint_angle_current_position(self,joint_indice):
+        return p.getJointState(self.robot_id,joint_indice)[0]
+
+    def get_joint_angle_current_positions(self):
+        return [self.get_joint_angle_current_position(i) for i in range(self.get_num_joint())]
+    
+    def get_joint_frame_current_position(self, joint_index):
+        return p.getJointInfo(self.robot_id, joint_index)[14]
+    
+    def get_joint_frame_current_positions(self):
+        return [self.get_joint_frame_current_position(i) for i in range(self.get_num_joint())]
+    
+    # ------------ GET ROBOT INFO ------------
+    
+    def get_robot_current_position(self):
+        data = p.getLinkState(bodyUniqueId=self.robot_id, linkIndex=self.endEffectorIndex, computeForwardKinematics=True)
+        linkWorldPosition=data[0]
+        linkWorldOrientation=data[1]
+        worldLinkFramePosition=data[4]
+        worldLinkFrameOrientation=data[5]
+        return [linkWorldPosition, linkWorldOrientation, worldLinkFramePosition, worldLinkFrameOrientation]
+        #parent_frame_position = p.getJointInfo(self.robot_id, self.get_num_joint()-1)[14]
+        #endEffector_position = [parent_frame_position[i] + self.endEffector_offset[i] for i in range(3)]
+        #return endEffector_position
+    
+    def get_robot_current_position_all_link_frames(self):
+        data = []
+        linkWorldPosition, linkWorldOrientation, worldLinkFramePosition, worldLinkFrameOrientation = [], [], [], []
+        for i in range(self.endEffectorIndex):
+            data = p.getLinkState(bodyUniqueId=self.robot_id, linkIndex=i, computeForwardKinematics=True)
+            linkWorldPosition.append(data[0])
+            linkWorldOrientation.append(data[1])
+            worldLinkFramePosition.append(data[4])
+            worldLinkFrameOrientation.append(data[5])
+        return [linkWorldPosition, linkWorldOrientation, worldLinkFramePosition, worldLinkFrameOrientation]
+    
+    # ------------ OFFSET ------------
+
+    def set_endEffector_frame_offset(self, X, Y, Z):
+        self.endEffector_offset = [X, Y, Z]
+        endEffector_data = self.get_robot_current_position()
+        self.endEffector_frame = [endEffector_data[2][0] + X, endEffector_data[2][1] + Y, endEffector_data[2][2] + Z]
+        # self.constraint_id = p.createConstraint(parentBodyUniqueId       =self.robot_id,
+        #                                     parentLinkIndex         =self.get_num_joint()-1,
+        #                                     childBodyUniqueId       =-1, # Aucun corps enfant (par rapport au monde)
+        #                                     childLinkIndex          =-1, # Aucun lien enfant (par rapport au monde)
+        #                                     jointType               =p.JOINT_FIXED, # Garder le joint fixe pour appliquer un décalage
+        #                                     jointAxis               =[0, 0, 0], # Aucun axe de rotation
+        #                                     parentFramePosition     =endEffector_data[2], # Avant d'appliquer l'offset
+        #                                     childFramePosition      =self.endEffector_frame)  # Après application de l'offset
+    
+    def get_endEffector_frame(self):
+        return self.endEffector_frame
+
+    def get_endEffector_offset(self):
+        return self.endEffector_offset
+
+    # ------------ VIEW FRAMES ------------
+
+    def update_frame_axes(self,frame_position, axis_length=0.5):
+        p.addUserDebugLine(frame_position, [frame_position[0] + axis_length, frame_position[1], frame_position[2]], [1, 0, 0], 3, 0)
+        p.addUserDebugLine(frame_position, [frame_position[0], frame_position[1] + axis_length, frame_position[2]], [0, 1, 0], 3, 0)
+        p.addUserDebugLine(frame_position, [frame_position[0], frame_position[1], frame_position[2] + axis_length], [0, 0, 1], 3, 0)
+
+    def delete_frames_axes(self):
+        p.removeAllUserDebugItems()
+
+    def view_link_frame(self, link_index, print_terminal=True):
+        frame = self.get_robot_current_position_all_link_frames()[2][link_index]
+        self.update_frame_axes(frame)
+        if print_terminal: print(f"Link frame {link_index}:                   ",frame)
+
+    def view_all_link_frames(self, print_terminal=True):
+        for i in range(self.endEffectorIndex):
+            self.view_link_frame(i, print_terminal)
+
+    def view_joint_frame(self, joint_index, print_terminal=True):
+        frame = self.get_joint_frame_current_position(joint_index)
+        self.update_frame_axes(frame)
+        if print_terminal: print(f"Joint frame {joint_index}:                  ",frame)
+    
+    def view_all_joint_frames(self, print_terminal=True):
+        for i in range(self.get_num_joint()):
+            self.view_joint_frame(i, print_terminal)
+
+    def view_endEffector_frame(self, print_terminal=True):
+        self.update_frame_axes(self.endEffector_frame)
+        if print_terminal: print(f"End effector frame:                         ",self.endEffector_frame)
+
+    # ------------ GENERATE GRAPHS ------------
+
+    def update_plot_joint_positions(self):
+        q = self.get_joint_angle_current_positions()
+        self.timestep += 1
+        for i, joint_position in enumerate(q):
+            if i not in self.joint_lines:
+                self.joint_lines[i], = self.ax.plot([], [], label=f"Joint {i}")
+            self.joint_lines[i].set_data(range(self.timestep), joint_position)
+        self.ax.set_xlabel('Temps')
+        self.ax.set_ylabel('Position du joint')
+        self.ax.set_title('Positions des joints au fil du temps')
+        self.ax.legend()
+        self.fig.canvas.draw()
+        self.fig.canvas.flush_events()
+        
+
+    def update_plot_joint_speed(self):
+        pass
+
+    def update_plot_joint_torque(self):
+        pass
+
+    def plot_robot_position(self):
+        pass
+    
+    def plot_robot_speed(self):
+        pass
+
+    def plot_robot_torque(self):
+        pass
+    
+    
