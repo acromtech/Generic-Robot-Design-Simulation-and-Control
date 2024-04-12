@@ -1,4 +1,4 @@
-# TER
+# Generic Robot Design, Simulation and Control
 
 This program provides functionalities for controlling robotic arms in simulation environments. It allows you to simulate, model, and control robot movements for various applications.
 
